@@ -26,6 +26,10 @@ export default function CookApp() {
   const [inviteCode, setInviteCode] = useState(searchParams.get('invite') || '');
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(!!searchParams.get('invite'));
 
