@@ -13,6 +13,16 @@ interface HouseholdMapping {
   flat: string;
 }
 
+export default function CookApp() {
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [households, setHouseholds] = useState<HouseholdMapping[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  const [activeOwnerId, setActiveOwnerId] = useState<string | null>(() => {
+    return localStorage.getItem('souschef_active_owner_id');
+  });
+
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
