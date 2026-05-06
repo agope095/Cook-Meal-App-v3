@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* Chat Assistant - Markdown Table Styles */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+.prose th, .prose td {
+  border: 1px solid #e5e7eb;
+  padding: 6px 10px;
+  text-align: left;
+}
+.prose th {
+  background-color: #f3f4f6;
+  font-weight: 600;
+}
+.prose tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+.prose ul, .prose ol {
+  padding-left: 1.25rem;
+  margin: 0.25rem 0;
+}
+.prose li {
+  margin: 0.15rem 0;
+}
+.prose p {
+  margin: 0.25rem 0;
+}
+
+.font-local-script {
+  font-family: 'Noto Sans Bengali', 'Noto Sans Devanagari', 'Inter', sans-serif;
+}

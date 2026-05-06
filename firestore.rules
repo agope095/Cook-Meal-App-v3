@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Simple helper: is the user logged in?
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Is the user the owner of the specific document? (For owners collection)
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    // Is the user an admin (legacy check)
+    function isAdmin() {
+      return signedIn() && 
+        (request.auth.token.email == "gopeabhijit85@gmail.com" || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.token.email)));
+    }
+
+    // Is the user a cook for a specific owner?
+    function isCookOf(ownerId) {
+      return signedIn() && 
+        exists(/databases/$(database)/documents/cooks/$(request.auth.uid)) &&
+        (ownerId in get(/databases/$(database)/documents/cooks/$(request.auth.uid)).data.ownerIds);
+    }
+
+    // ===============================================================
+    
+    // Owner Profiles
+    match /owners/{userId} {
+      allow read: if signedIn();
+      allow write: if isSelf(userId);
+    }
+
+    // Localities (Auto-suggest)
+    match /localities/{id} {
+      allow read, write: if signedIn();
+    }
+
+    // Admins (Legacy)
+    match /admins/{email} {
+      allow read: if true; 
+      allow write: if false;
+    }
+
+    // Meal Plans
+    match /mealPlans/{planId} {
+      allow read: if signedIn() && (
+        isAdmin() || 
+        (resource.data.ownerId == request.auth.uid) || 
+        isCookOf(resource.data.ownerId)
+      );
+      
+      allow write: if signedIn() && (
+        isAdmin() || 
+        (request.resource.data.ownerId == request.auth.uid) ||
+        (resource != null && isCookOf(resource.data.ownerId))
+      );
+    }
+
+    // Global Collections
+    match /recipeDictionary/{id} {
+      allow read: if signedIn();
+      allow write: if signedIn(); // Any logged in user can contribute to dictionary
+    }
+
+    match /favorites/{id} {
+      allow read: if signedIn();
+      allow write: if signedIn() && (
+        isAdmin() || 
+        // Document ID starts with householdId_ (simple prefix-ish check via ID matching)
+        id.size() > 20 
+      );
+    }
+
+    
+    match /inviteCodes/{code} {
+      allow read: if true; // Cooks need to check invite codes before logging in
+      allow write: if signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid));
+    }
+
+    match /cooks/{cookId} {
+      allow read, write: if isSelf(cookId);
+    }
+  }
+}

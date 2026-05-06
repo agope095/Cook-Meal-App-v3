@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "MealItem": {
+      "title": "MealItem",
+      "description": "An item in a meal.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "quantity": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "bengaliName": { "type": "string" },
+        "bengaliVideoUrl": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "MealPlan": {
+      "title": "MealPlan",
+      "description": "A meal plan for a specific date.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "lunch": {
+          "type": "array",
+          "items": { "$ref": "#/entities/MealItem" }
+        },
+        "dinner": {
+          "type": "array",
+          "items": { "$ref": "#/entities/MealItem" }
+        },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["date", "lunch", "dinner", "ownerId"]
+    },
+    "RecipeDictionaryItem": {
+      "title": "RecipeDictionaryItem",
+      "description": "A cached dictionary item for recipes.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "bengaliName": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "bengaliVideoUrl": { "type": "string" },
+        "lastUpdated": { "type": "number" }
+      },
+      "required": ["id", "name", "bengaliName", "videoUrl", "bengaliVideoUrl", "lastUpdated"]
+    }
+  },
+  "firestore": {
+    "/mealPlans/{date}": {
+      "schema": {
+        "$ref": "#/entities/MealPlan"
+      },
+      "description": "Collection of meal plans, indexed by date string (YYYY-MM-DD)."
+    },
+    "/recipeDictionary/{id}": {
+      "schema": {
+        "$ref": "#/entities/RecipeDictionaryItem"
+      },
+      "description": "Collection of cached recipe translations and video URLs."
+    }
+  }
+}
