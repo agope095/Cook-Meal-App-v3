@@ -198,9 +198,9 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       const item = processed[i];
       if (!item.name) continue;
 
-      const needsNameTranslation = !item.bengaliName || item.bengaliName.includes('(Bengali)') || item.bengaliName.startsWith('Error:');
-      const needsQuantityTranslation = item.quantity && (!item.bengaliQuantity || item.bengaliQuantity.includes('(Bengali)') || item.bengaliQuantity.startsWith('Error:'));
-      const needsInstructionTranslation = item.instruction && (!item.bengaliInstruction || item.bengaliInstruction.includes('(Bengali)') || item.bengaliInstruction.startsWith('Error:'));
+      const needsNameTranslation = !item.bengaliName || item.bengaliName.includes('(Bengali)') || item.bengaliName.includes('(Hindi)') || item.bengaliName.startsWith('Error:');
+      const needsQuantityTranslation = item.quantity && (!item.bengaliQuantity || item.bengaliQuantity.includes('(Bengali)') || item.bengaliQuantity.includes('(Hindi)') || item.bengaliQuantity.startsWith('Error:'));
+      const needsInstructionTranslation = item.instruction && (!item.bengaliInstruction || item.bengaliInstruction.includes('(Bengali)') || item.bengaliInstruction.includes('(Hindi)') || item.bengaliInstruction.startsWith('Error:'));
       const needsTranslation = needsNameTranslation || needsQuantityTranslation || needsInstructionTranslation;
       
       const needsHindiVideo = !item.videoUrl && !isBasicStaple(item.name);
@@ -302,12 +302,12 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
             let bengaliVideoUrl = item.bengaliVideoUrl || req.dictItem?.bengaliVideoUrl || '';
 
             if (req.needsVideo) {
-              const [fetchedHindi, fetchedBengali] = await Promise.all([
+              const [fetchedHindi, fetchedLocal] = await Promise.all([
                 !hindiVideoUrl ? getYouTubeVideoId(`${item.name} recipe`) : Promise.resolve(hindiVideoUrl),
-                !bengaliVideoUrl ? getYouTubeVideoId(`${item.name} recipe in bengali`) : Promise.resolve(bengaliVideoUrl)
+                !bengaliVideoUrl ? getYouTubeVideoId(`${item.name} recipe in ${userProfile?.cookLanguage || 'Bengali'}`) : Promise.resolve(bengaliVideoUrl)
               ]);
               hindiVideoUrl = fetchedHindi;
-              bengaliVideoUrl = fetchedBengali;
+              bengaliVideoUrl = fetchedLocal;
             }
 
             const isInvalid = (val: string | undefined) => !val || val.includes('(Bengali)') || val.includes('(Hindi)') || val.startsWith('Error:');
@@ -766,7 +766,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
 
                 <input
                   type="text"
-                  placeholder={`${userProfile?.cookLanguage || 'Bengali'} Name (Optional - Auto-translates on save)`}
+                  placeholder={`${userProfile?.cookLanguage || 'Local'} Name (Optional - Auto-translates on save)`}
                   value={item.bengaliName || ''}
                   onChange={(e) => updateItem(mealType, item.id, 'bengaliName', e.target.value)}
                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 ${item.prepared ? 'bg-green-100/50 border-green-200 text-green-900 opacity-70' : 'bg-white border-gray-300'}`}
@@ -780,7 +780,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                 />
                 <input
                   type="text"
-                  placeholder={`${userProfile?.cookLanguage || 'Bengali'} Quantity (Optional - Auto-translates on save)`}
+                  placeholder={`${userProfile?.cookLanguage || 'Local'} Quantity (Optional - Auto-translates on save)`}
                   value={item.bengaliQuantity || ''}
                   onChange={(e) => updateItem(mealType, item.id, 'bengaliQuantity', e.target.value)}
                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 ${item.prepared ? 'bg-green-100/50 border-green-200 text-green-900 opacity-70' : 'bg-white border-gray-300'}`}
@@ -794,7 +794,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                 />
                 <input
                   type="text"
-                  placeholder={`${userProfile?.cookLanguage || 'Bengali'} Instruction (Optional - Auto-translates on save)`}
+                  placeholder={`${userProfile?.cookLanguage || 'Local'} Instruction (Optional - Auto-translates on save)`}
                   value={item.bengaliInstruction || ''}
                   onChange={(e) => updateItem(mealType, item.id, 'bengaliInstruction', e.target.value)}
                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 ${item.prepared ? 'bg-green-100/50 border-green-200 text-green-900 opacity-70' : 'bg-white border-gray-300'}`}
@@ -813,7 +813,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                   <Youtube size={18} className="text-gray-400 mr-2" />
                   <input
                     type="url"
-                    placeholder="Bengali Video URL (Optional)"
+                    placeholder={`${userProfile?.cookLanguage || 'Local'} Video URL (Optional)`}
                     value={item.bengaliVideoUrl || ''}
                     onChange={(e) => updateItem(mealType, item.id, 'bengaliVideoUrl', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 ${item.prepared ? 'bg-green-100/50 border-green-200 text-green-900 opacity-70' : 'bg-white border-gray-300'}`}

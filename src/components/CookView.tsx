@@ -111,7 +111,7 @@ export default function CookView({ ownerId }: CookViewProps) {
   const isViewingToday = isSameDay(selectedDate, new Date());
   const isLocal = language === 'local';
   const localLabel = ownerLanguage === 'Hindi' ? 'HI' : 'বাং';
-  const localName = ownerLanguage === 'Hindi' ? 'Hindi' : 'Bengali';
+  const localName = ownerLanguage || 'Local';
   
   const translations = {
     dailyMenu: isLocal ? (ownerLanguage === 'Hindi' ? 'दैनिक मेनू' : 'দৈনিক মেনু') : 'Daily Menu',

@@ -7,12 +7,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Is the user the owner of the specific document? (For owners collection)
+    // Is the user the owner of the specific document? (For owners/cooks collection)
     function isSelf(userId) {
       return signedIn() && request.auth.uid == userId;
     }
 
-    // Is the user an admin (legacy check)
+    // Is the user an admin
     function isAdmin() {
       return signedIn() && 
         (request.auth.token.email == "gopeabhijit85@gmail.com" || 
@@ -25,64 +25,73 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/cooks/$(request.auth.uid)) &&
         (ownerId in get(/databases/$(database)/documents/cooks/$(request.auth.uid)).data.ownerIds);
     }
-
-    // ===============================================================
     
+    // Is the user part of the household (owner or joined family member)
+    function isPartOfHousehold(ownerId) {
+       return signedIn() && 
+         (request.auth.uid == ownerId || 
+          (exists(/databases/$(database)/documents/owners/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/owners/$(request.auth.uid)).data.joinedHouseholdId == ownerId));
+    }
+
     // Owner Profiles
     match /owners/{userId} {
       allow read: if signedIn();
       allow write: if isSelf(userId);
     }
 
-    // Localities (Auto-suggest)
-    match /localities/{id} {
-      allow read, write: if signedIn();
-    }
-
-    // Admins (Legacy)
-    match /admins/{email} {
-      allow read: if true; 
-      allow write: if false;
-    }
-
     // Meal Plans
     match /mealPlans/{planId} {
       allow read: if signedIn() && (
         isAdmin() || 
-        (resource.data.ownerId == request.auth.uid) || 
+        isPartOfHousehold(resource.data.ownerId) || 
         isCookOf(resource.data.ownerId)
       );
       
       allow write: if signedIn() && (
         isAdmin() || 
-        (request.resource.data.ownerId == request.auth.uid) ||
+        isPartOfHousehold(request.resource.data.ownerId) ||
         (resource != null && isCookOf(resource.data.ownerId))
       );
     }
 
-    // Global Collections
-    match /recipeDictionary/{id} {
+    // Global Curated Recipes
+    match /recipes/{id} {
       allow read: if signedIn();
-      allow write: if signedIn(); // Any logged in user can contribute to dictionary
+      allow write: if isAdmin();
+    }
+    
+    // User Proposed Recipes (fallback dictionary)
+    match /recipeProposals/{id} {
+      allow read: if signedIn() && (isAdmin() || id.startsWith(request.auth.uid) || isCookOf(resource.data.ownerId));
+      allow write: if signedIn() && id.startsWith(request.auth.uid);
     }
 
     match /favorites/{id} {
-      allow read: if signedIn();
-      allow write: if signedIn() && (
-        isAdmin() || 
-        // Document ID starts with householdId_ (simple prefix-ish check via ID matching)
-        id.size() > 20 
-      );
+      allow read: if signedIn() && (isAdmin() || id.startsWith(request.auth.uid) || isCookOf(resource.data.ownerId));
+      allow write: if signedIn() && (isAdmin() || id.startsWith(request.auth.uid));
     }
 
-    
     match /inviteCodes/{code} {
-      allow read: if true; // Cooks need to check invite codes before logging in
+      // v4: Only authenticated users can read invite codes
+      allow read: if signedIn(); 
       allow write: if signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid));
+      allow delete: if signedIn();
     }
 
     match /cooks/{cookId} {
-      allow read, write: if isSelf(cookId);
+      allow read: if isSelf(cookId) || (signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid)));
+      allow write: if isSelf(cookId);
+    }
+
+    match /localities/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /admins/{email} {
+      allow read: if true; 
+      allow write: if false;
     }
   }
 }

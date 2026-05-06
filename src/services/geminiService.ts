@@ -40,7 +40,6 @@ async function callAI<T>(payload: Record<string, unknown>, userProfile?: { name?
     }
   }
 
-  const baseUrl = ''; // Cloudflare Pages handles /api/ai routing automatically
   const response = await fetch('/api/ai', {
     method: 'POST',
     headers: {
@@ -50,31 +49,36 @@ async function callAI<T>(payload: Record<string, unknown>, userProfile?: { name?
     body: JSON.stringify({ ...payload, userProfile, culinaryMemory }),
   });
 
-  const result = await response.json();
-
   if (!response.ok) {
-    throw new Error(result?.error || 'AI request failed');
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `AI request failed with status ${response.status}`);
   }
 
-  // Handle new format where memoryUpdate might be present
-  if (result.memoryUpdate && auth.currentUser) {
-    try {
-      const { doc, updateDoc } = await import('firebase/firestore');
-      const { db } = await import('../firebase');
-      const ownerRef = doc(db, 'owners', auth.currentUser.uid);
-      await updateDoc(ownerRef, { 
-        culinaryMemory: (culinaryMemory ? culinaryMemory + '. ' : '') + result.memoryUpdate 
-      });
-      console.log("[DEBUG] Memory updated:", result.memoryUpdate);
-    } catch (e) {
-      console.warn("Failed to update memory", e);
+  const result = await response.json();
+
+  // Handle memory updates (incremental or summarized)
+  if (auth.currentUser) {
+    const { doc, updateDoc } = await import('firebase/firestore');
+    const { db } = await import('../firebase');
+    const ownerRef = doc(db, 'owners', auth.currentUser.uid);
+
+    if (result.summarizedMemory) {
+       await updateDoc(ownerRef, { culinaryMemory: result.summarizedMemory });
+       console.log("[DEBUG] Memory pruned/summarized by AI");
+    } else if (result.memoryUpdate) {
+       const newMemory = (culinaryMemory ? culinaryMemory + '. ' : '') + result.memoryUpdate;
+       await updateDoc(ownerRef, { culinaryMemory: newMemory });
+       console.log("[DEBUG] Memory updated:", result.memoryUpdate);
     }
   }
 
   // CRITICAL: Ensure we never return undefined to the UI
   if (result.data === undefined || result.data === null) {
     console.error("[ERROR] AI returned no data:", result);
-    return (Array.isArray(payload.existingDraft) ? [] : "") as any;
+    // Return empty state matching expected type
+    if (payload.action === 'meal-plan') return [] as any;
+    if (payload.action === 'batch-translate') return [] as any;
+    return "" as any;
   }
 
   return result.data as T;

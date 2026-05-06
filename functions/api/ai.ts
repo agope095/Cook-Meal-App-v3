@@ -142,10 +142,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const userInfo = userProfile.name ? `User Name: ${userProfile.name}. City: ${userProfile.city || 'Unknown'}. Society: ${userProfile.society || 'Unknown'}. Cook's Language: ${cookLanguage}.` : `Cook's Language: ${cookLanguage}.`;
     const userMemory = payload.culinaryMemory || 'No personal preferences recorded yet.';
 
+    // Memory Summarization check (Keep context lean)
+    let currentMemory = userMemory;
+    let memoryWasSummarized = false;
+    if (userMemory.length > 2000) {
+      console.log('[DEBUG] Memory too long, requesting summarization...');
+      const summaryPrompt = `Summarize the following user culinary preferences into a concise paragraph (max 500 chars), preserving ALL allergies and strong dislikes:\n${userMemory}`;
+      try {
+        currentMemory = await callNvidia([{ role: 'user', content: summaryPrompt }], env, 0.3);
+        memoryWasSummarized = true;
+      } catch {
+        currentMemory = await callGemini(summaryPrompt, env);
+        memoryWasSummarized = true;
+      }
+    }
+
     if (action === 'meal-plan') {
       const { prompt, startDate, existingDraft, pastMeals, favorites } = payload;
       let systemInstruction = `You are an expert AI meal planner. ${userInfo}\nStart date: ${startDate}.\n`;
-      systemInstruction += `USER MEMORY/PREFERENCES: ${userMemory}\n`;
+      systemInstruction += `USER MEMORY/PREFERENCES: ${currentMemory}\n`;
       systemInstruction += `STRICT FOCUS: Only modify the specific meal (lunch/dinner) or date mentioned in the User Request. Do NOT suggest new items for other meals if they already have content or if you can leave them empty.
 INSTRUCTION RULE: Leave "instruction" and "instructionBn" as empty strings ("") unless the user explicitly asks for instructions, recipes, or if there is a critical dietary note. Do not add general descriptions of the dishes.
 SCHEMA: Return ONLY a JSON array of objects with this EXACT structure:
@@ -182,7 +197,7 @@ If no items for lunch/dinner, return an empty array []. Keep suggestions healthy
       let systemInstruction = `You are "SousChefAI", a friendly, slightly chatty, and knowledgeable culinary assistant. ${userInfo}\n`;
 
       systemInstruction += `CURRENT DATE: ${currentDate || new Date().toISOString()}\n`;
-      systemInstruction += `USER MEMORY: ${userMemory}\n`;
+      systemInstruction += `USER MEMORY: ${currentMemory}\n`;
       systemInstruction += `GREETING: Use the User's City (${userProfile.city}) for location-based greetings (e.g., "Good evening in ${userProfile.city}!"). DO NOT mention the Society Name (${userProfile.society}) in the greeting unless the user specifically asks about it or if it's relevant to a specific local event/ingredient. Keep the greeting focused on the City.\n`;
       systemInstruction += `STRICT RULE: Only use the "User's Past meals" provided below. If today's meal isn't listed, DO NOT guess what the user ate. Say "I don't see what you had for lunch today yet—want to tell me?" instead of assuming.\n`;
       systemInstruction += `CONVERSATION STYLE: Be warm and helpful. Keep responses to 2-4 sentences. Feel free to ask a follow-up question to keep the conversation going.\n`;
@@ -196,13 +211,17 @@ If no items for lunch/dinner, return an empty array []. Keep suggestions healthy
       try {
         const parsed = JSON.parse(content);
         if (parsed.reply) {
-          return jsonResponse(200, { data: parsed.reply, memoryUpdate: parsed.updateMemory });
+          return jsonResponse(200, { 
+            data: parsed.reply, 
+            memoryUpdate: parsed.updateMemory,
+            summarizedMemory: memoryWasSummarized ? currentMemory : undefined 
+          });
         }
       } catch {
         // Fallback to plain text
       }
       
-      return jsonResponse(200, { data: content });
+      return jsonResponse(200, { data: content, summarizedMemory: memoryWasSummarized ? currentMemory : undefined });
     }
 
     if (action === 'batch-translate') {

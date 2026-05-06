@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Users, UserPlus, Key, Trash2, CheckCircle, Copy } from 'lucide-react';
+import { Users, UserPlus, Key, Trash2, CheckCircle, Copy, Share2, MessageCircle } from 'lucide-react';
 
 interface InviteCode {
   code: string;
@@ -12,7 +12,8 @@ interface InviteCode {
 interface Cook {
   id: string;
   name: string;
-  phone: string;
+  email: string;
+  phone?: string;
 }
 
 interface ManageCooksProps {
@@ -27,54 +28,46 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
     if (!auth.currentUser || !householdId) return;
-    setLoading(true);
 
-    try {
-      // Fetch active invite codes for this owner
-      const qCodes = query(collection(db, 'inviteCodes'), where('ownerId', '==', householdId));
-      const codesSnap = await getDocs(qCodes);
+    // Real-time listener for invite codes
+    const qCodes = query(collection(db, 'inviteCodes'), where('ownerId', '==', householdId));
+    const unsubscribeCodes = onSnapshot(qCodes, (snapshot) => {
       const codes: InviteCode[] = [];
-      codesSnap.forEach((doc) => {
+      snapshot.forEach((doc) => {
         codes.push({ code: doc.id, ...doc.data() } as InviteCode);
       });
       setInviteCodes(codes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setLoading(false);
+    });
 
-      // Fetch linked cooks (assuming a cooks collection where assignedOwnerId == householdId)
-      const qCooks = query(collection(db, 'cooks'), where('ownerIds', 'array-contains', householdId));
-      const cooksSnap = await getDocs(qCooks);
+    // Real-time listener for linked cooks
+    const qCooks = query(collection(db, 'cooks'), where('ownerIds', 'array-contains', householdId));
+    const unsubscribeCooks = onSnapshot(qCooks, (snapshot) => {
       const linkedCooks: Cook[] = [];
-      cooksSnap.forEach((doc) => {
+      snapshot.forEach((doc) => {
         linkedCooks.push({ id: doc.id, ...doc.data() } as Cook);
       });
       setCooks(linkedCooks);
-      
-    } catch (error) {
-      console.error("Error fetching cook data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
+
+    return () => {
+      unsubscribeCodes();
+      unsubscribeCooks();
+    };
+  }, [householdId]);
 
   const generateInviteCode = async () => {
     if (!auth.currentUser || !householdId) return;
     setGenerating(true);
     
     try {
-      // Generate a random 6-digit alphanumeric code
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
       await setDoc(doc(db, 'inviteCodes', code), {
         ownerId: householdId,
         createdAt: new Date().toISOString(),
         status: 'active'
       });
-      
-      await fetchData(); // Refresh list
     } catch (error) {
       console.error("Error generating code:", error);
     } finally {
@@ -85,14 +78,26 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
   const deleteInviteCode = async (code: string) => {
     try {
       await deleteDoc(doc(db, 'inviteCodes', code));
-      await fetchData();
     } catch (error) {
       console.error("Error deleting code:", error);
     }
   };
 
+  const shareViaWhatsApp = (code: string) => {
+    const url = `${window.location.origin}/cook?invite=${code}`;
+    const text = `Hi! Join my kitchen on SousChefAI using this link: ${url}\nOr use code: ${code}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const shareViaText = (code: string) => {
+    const url = `${window.location.origin}/cook?invite=${code}`;
+    const text = `Join my kitchen on SousChefAI: ${url}`;
+    window.location.href = `sms:?&body=${encodeURIComponent(text)}`;
+  };
+
   const copyToClipboard = (code: string) => {
-    navigator.clipboard.writeText(code);
+    const url = `${window.location.origin}/cook?invite=${code}`;
+    navigator.clipboard.writeText(url);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
   };
@@ -126,31 +131,48 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
       </div>
 
       <div className="p-6">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Active Invite Codes</h3>
+        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Active Invite Links</h3>
         {inviteCodes.filter(c => c.status === 'active').length === 0 ? (
           <p className="text-gray-500 italic mb-6">No active invite codes.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
             {inviteCodes.filter(c => c.status === 'active').map((code) => (
-              <div key={code.code} className="flex items-center justify-between p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-                <div>
-                  <span className="text-2xl font-mono font-bold tracking-widest text-indigo-700">{code.code}</span>
-                  <div className="text-xs text-indigo-400 mt-1">Created {new Date(code.createdAt).toLocaleDateString()}</div>
-                </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => copyToClipboard(code.code)}
-                    className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors"
-                    title="Copy code"
-                  >
-                    {copiedCode === code.code ? <CheckCircle size={18} /> : <Copy size={18} />}
-                  </button>
+              <div key={code.code} className="flex flex-col p-4 bg-indigo-50 rounded-2xl border border-indigo-100 gap-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-2xl font-mono font-bold tracking-widest text-indigo-700">{code.code}</span>
+                    <div className="text-[10px] uppercase font-black tracking-tighter text-indigo-400 mt-1">One-time Use</div>
+                  </div>
                   <button 
                     onClick={() => deleteInviteCode(code.code)}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     title="Revoke code"
                   >
                     <Trash2 size={18} />
+                  </button>
+                </div>
+                
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => shareViaWhatsApp(code.code)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-green-500 text-white rounded-xl text-xs font-bold hover:bg-green-600 transition-colors shadow-sm"
+                  >
+                    <MessageCircle size={14} />
+                    WhatsApp
+                  </button>
+                  <button 
+                    onClick={() => shareViaText(code.code)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-500 text-white rounded-xl text-xs font-bold hover:bg-blue-600 transition-colors shadow-sm"
+                  >
+                    <Share2 size={14} />
+                    SMS
+                  </button>
+                  <button 
+                    onClick={() => copyToClipboard(code.code)}
+                    className="p-2 bg-white text-indigo-600 border border-indigo-200 rounded-xl hover:bg-indigo-50 transition-colors shadow-sm"
+                    title="Copy Link"
+                  >
+                    {copiedCode === code.code ? <CheckCircle size={16} /> : <Copy size={16} />}
                   </button>
                 </div>
               </div>
@@ -175,7 +197,7 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
                   </div>
                   <div>
                     <p className="font-medium text-gray-800">{cook.name}</p>
-                    <p className="text-sm text-gray-500">{cook.phone}</p>
+                    <p className="text-sm text-gray-500">{cook.email}</p>
                   </div>
                 </div>
                 <button className="text-sm text-red-600 hover:text-red-800 font-medium">
