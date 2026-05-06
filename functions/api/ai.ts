@@ -147,6 +147,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       let systemInstruction = `You are an expert AI meal planner. ${userInfo}\nStart date: ${startDate}.\n`;
       systemInstruction += `USER MEMORY/PREFERENCES: ${userMemory}\n`;
       systemInstruction += `STRICT FOCUS: Only modify the specific meal (lunch/dinner) or date mentioned in the User Request. Do NOT suggest new items for other meals if they already have content or if you can leave them empty.
+INSTRUCTION RULE: Leave "instruction" and "instructionBn" as empty strings ("") unless the user explicitly asks for instructions, recipes, or if there is a critical dietary note. Do not add general descriptions of the dishes.
 SCHEMA: Return ONLY a JSON array of objects with this EXACT structure:
 [{
   "date": "YYYY-MM-DD",

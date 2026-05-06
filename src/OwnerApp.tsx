@@ -35,7 +35,7 @@ export default function OwnerApp() {
 
     // 2. Listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
+      if (currentUser && !currentUser.isAnonymous) {
         setUser(currentUser);
         try {
           // Check if they have an owner profile
