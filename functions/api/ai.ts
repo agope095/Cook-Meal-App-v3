@@ -56,11 +56,14 @@ const callNvidia = async (messages: ChatMessage[], env: Env, temperature = 0.5) 
       messages,
       temperature,
       max_tokens: 2048,
+      chat_template_kwargs: { enable_thinking: false },
     })
   });
 
+  console.log('[DEBUG] NVIDIA Response Status:', response.status);
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('[ERROR] NVIDIA API Error Body:', errorText);
     throw new Error(`NVIDIA API failed with status ${response.status}: ${errorText}`);
   }
 
@@ -85,8 +88,10 @@ const callGemini = async (prompt: string, env: Env) => {
     }
   );
 
+  console.log('[DEBUG] Gemini Response Status:', response.status);
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('[ERROR] Gemini API Error Body:', errorText);
     throw new Error(`Gemini API failed with status ${response.status}: ${errorText}`);
   }
 
