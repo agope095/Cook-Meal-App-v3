@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db, logout } from './firebase';
-import { onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { onAuthStateChanged, User, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { doc, getDoc, setDoc, arrayUnion, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import CookView from './components/CookView';
@@ -13,23 +13,10 @@ interface HouseholdMapping {
   flat: string;
 }
 
-export default function CookApp() {
-  const [user, setUser] = useState<User | null>(null);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [households, setHouseholds] = useState<HouseholdMapping[]>([]);
-  const [searchParams, setSearchParams] = useSearchParams();
-  
-  const [activeOwnerId, setActiveOwnerId] = useState<string | null>(() => {
-    return localStorage.getItem('souschef_active_owner_id');
-  });
-
-  const [inviteCode, setInviteCode] = useState(searchParams.get('invite') || '');
-  const [loading, setLoading] = useState(true);
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const [authStep, setAuthStep] = useState<'phone' | 'otp'>('phone');
   const [error, setError] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(!!searchParams.get('invite'));
 
@@ -37,14 +24,12 @@ export default function CookApp() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        // Fetch cook profile
         try {
           const cookDoc = await getDoc(doc(db, 'cooks', currentUser.uid));
           if (cookDoc.exists()) {
             const data = cookDoc.data();
             setUserProfile(data);
             
-            // Reconstruct households from Firestore
             if (data.ownerIds && data.ownerIds.length > 0) {
               const houses: HouseholdMapping[] = [];
               for (const oid of data.ownerIds) {
@@ -62,13 +47,13 @@ export default function CookApp() {
               setHouseholds(houses);
             }
 
-            // Auto-connect if invite code in URL
             const urlInvite = searchParams.get('invite');
             if (urlInvite) {
               await handleDeepLinkConnect(currentUser, urlInvite);
             }
           } else {
-            setUserProfile(null);
+            // New cook through phone auth
+            setUserProfile({ name: 'New Cook' });
             setHouseholds([]);
           }
         } catch (err) {
@@ -78,12 +63,80 @@ export default function CookApp() {
         setUser(null);
         setUserProfile(null);
         setHouseholds([]);
+        setAuthStep('phone');
+        setConfirmationResult(null);
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
+
+  const initRecaptcha = () => {
+    if (!(window as any).recaptchaVerifier) {
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible',
+        'callback': () => {
+          console.log("reCAPTCHA solved");
+        }
+      });
+    }
+  };
+
+  const handleSendOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setAuthLoading(true);
+    try {
+      initRecaptcha();
+      const appVerifier = (window as any).recaptchaVerifier;
+      
+      // Ensure phone number starts with + and country code
+      let formattedPhone = phoneNumber.trim();
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = '+91' + formattedPhone; // Default to India if no code
+      }
+
+      const result = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+      setConfirmationResult(result);
+      setAuthStep('otp');
+    } catch (err: any) {
+      console.error("OTP Send Error:", err);
+      setError(err.message || "Failed to send OTP. Please check the number.");
+      if ((window as any).recaptchaVerifier) {
+        (window as any).recaptchaVerifier.clear();
+        (window as any).recaptchaVerifier = null;
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setAuthLoading(true);
+    try {
+      const result = await confirmationResult.confirm(verificationCode);
+      const user = result.user;
+      
+      // Create profile if it doesn't exist
+      const cookRef = doc(db, 'cooks', user.uid);
+      const cookSnap = await getDoc(cookRef);
+      if (!cookSnap.exists()) {
+        await setDoc(cookRef, {
+          phoneNumber: user.phoneNumber,
+          ownerIds: [],
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (err: any) {
+      console.error("OTP Verify Error:", err);
+      setError("Invalid code. Please try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   const handleDeepLinkConnect = async (currentUser: User, code: string) => {
     try {
@@ -93,18 +146,13 @@ export default function CookApp() {
       
       if (inviteSnap.exists()) {
         const { ownerId } = inviteSnap.data();
-        
-        // 1. Register cook
         const cookRef = doc(db, 'cooks', currentUser.uid);
         await updateDoc(cookRef, {
           ownerIds: arrayUnion(ownerId),
           updatedAt: new Date().toISOString()
         });
-
-        // 2. Invalidate code
         await deleteDoc(inviteRef);
 
-        // 3. Update local state
         const ownerSnap = await getDoc(doc(db, 'owners', ownerId));
         if (ownerSnap.exists()) {
           const data = ownerSnap.data();
@@ -118,7 +166,6 @@ export default function CookApp() {
           setActiveOwnerId(ownerId);
         }
       }
-      // Clear URL params
       setSearchParams({});
       setIsAddingNew(false);
     } catch (err) {
@@ -135,31 +182,6 @@ export default function CookApp() {
       localStorage.removeItem('souschef_active_owner_id');
     }
   }, [activeOwnerId]);
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setAuthLoading(true);
-    try {
-      if (authMode === 'login') {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        if (!name) throw new Error("Please enter your name");
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // Create cook profile
-        await setDoc(doc(db, 'cooks', userCredential.user.uid), {
-          name: name,
-          email: email,
-          ownerIds: [],
-          createdAt: new Date().toISOString()
-        });
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,18 +201,13 @@ export default function CookApp() {
       }
 
       const { ownerId } = inviteSnap.data();
-
-      // 1. Register this cook's UID with the owner
       const cookRef = doc(db, 'cooks', user.uid);
       await updateDoc(cookRef, {
         ownerIds: arrayUnion(ownerId),
         updatedAt: new Date().toISOString()
       });
-
-      // 2. Invalidate the invite code (One-time use)
       await deleteDoc(inviteRef);
 
-      // 3. Fetch owner details for UI
       const ownerSnap = await getDoc(doc(db, 'owners', ownerId));
       if (ownerSnap.exists()) {
         const data = ownerSnap.data();
@@ -225,86 +242,91 @@ export default function CookApp() {
     );
   }
 
-  // Auth Screen
   if (!user) {
     return (
       <div className="min-h-screen bg-orange-50 flex flex-col items-center justify-center p-6">
+        <div id="recaptcha-container"></div>
         <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl border border-orange-100 p-8">
           <div className="text-center mb-8">
             <div className="bg-orange-500 w-16 h-16 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-lg rotate-3">
               <Home size={32} />
             </div>
             <h1 className="text-3xl font-black text-gray-900">Cook Portal</h1>
-            <p className="text-gray-500 font-medium">Join a kitchen to start your shift</p>
+            <p className="text-gray-500 font-medium">
+              {authStep === 'phone' ? 'Enter your phone to start' : 'Enter the 6-digit code'}
+            </p>
           </div>
 
-          <form onSubmit={handleAuth} className="space-y-4">
-            {authMode === 'register' && (
+          {authStep === 'phone' ? (
+            <form onSubmit={handleSendOTP} className="space-y-4">
               <div>
-                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Full Name</label>
+                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Phone Number</label>
                 <div className="relative">
-                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={18} />
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">+91</span>
                   <input
-                    type="text"
+                    type="tel"
                     required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold"
-                    placeholder="Enter your name"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    className="w-full pl-14 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-black text-xl tracking-widest"
+                    placeholder="9876543210"
                   />
                 </div>
               </div>
-            )}
 
-            <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={18} />
+              {error && <p className="text-red-500 text-xs font-bold px-1">{error}</p>}
+
+              <button
+                type="submit"
+                disabled={authLoading || phoneNumber.length < 10}
+                className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-600 transition-all shadow-lg hover:shadow-orange-200 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {authLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : (
+                  <>
+                    Send OTP
+                    <ChevronRight size={20} />
+                  </>
+                )}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOTP} className="space-y-4">
+              <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Verification Code</label>
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold"
-                  placeholder="cook@example.com"
+                  autoFocus
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-black text-3xl tracking-[1rem] text-center"
+                  placeholder="000000"
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={18} />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold"
-                  placeholder="••••••••"
-                />
-              </div>
-            </div>
+              {error && <p className="text-red-500 text-xs font-bold px-1 text-center">{error}</p>}
 
-            {error && <p className="text-red-500 text-xs font-bold px-1">{error}</p>}
+              <button
+                type="submit"
+                disabled={authLoading || verificationCode.length < 6}
+                className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-600 transition-all shadow-lg hover:shadow-orange-200 disabled:opacity-50 flex items-center justify-center"
+              >
+                {authLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : 'Verify & Sign In'}
+              </button>
 
-            <button
-              type="submit"
-              disabled={authLoading}
-              className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-600 transition-all shadow-lg hover:shadow-orange-200 disabled:opacity-50 flex items-center justify-center"
-            >
-              {authLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : (authMode === 'login' ? 'Sign In' : 'Create Account')}
-            </button>
-          </form>
+              <button
+                type="button"
+                onClick={() => setAuthStep('phone')}
+                className="w-full text-center text-orange-600 text-sm font-bold hover:underline mt-2"
+              >
+                Change Phone Number
+              </button>
+            </form>
+          )}
 
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
-              className="text-orange-600 text-sm font-bold hover:underline"
-            >
-              {authMode === 'login' ? "New here? Create an account" : "Already have an account? Sign In"}
-            </button>
-          </div>
+          <p className="mt-8 text-[10px] text-gray-400 text-center font-bold uppercase tracking-widest leading-relaxed">
+            By signing in, you agree to receive an SMS for verification. Standard rates apply.
+          </p>
         </div>
       </div>
     );
