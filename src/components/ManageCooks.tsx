@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, setDoc, doc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc, deleteDoc, onSnapshot, updateDoc, arrayRemove } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Users, UserPlus, Key, Trash2, CheckCircle, Copy, Share2, MessageCircle } from 'lucide-react';
 
@@ -80,6 +80,20 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
       await deleteDoc(doc(db, 'inviteCodes', code));
     } catch (error) {
       console.error("Error deleting code:", error);
+    }
+  };
+
+  const handleUnlink = async (cookId: string) => {
+    if (!householdId) return;
+    if (!window.confirm("Are you sure you want to unlink this cook? they will lose access to your menu.")) return;
+    
+    try {
+      await updateDoc(doc(db, 'cooks', cookId), {
+        ownerIds: arrayRemove(householdId)
+      });
+    } catch (error) {
+      console.error("Error unlinking cook:", error);
+      alert("Failed to unlink cook.");
     }
   };
 
@@ -193,14 +207,17 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
               <li key={cook.id} className="p-4 flex items-center justify-between bg-white hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold">
-                    {cook.name.charAt(0).toUpperCase()}
+                    {(cook.name || 'C').charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="font-medium text-gray-800">{cook.name}</p>
+                    <p className="font-medium text-gray-800">{cook.name || 'Unnamed Cook'}</p>
                     <p className="text-sm text-gray-500">{cook.email}</p>
                   </div>
                 </div>
-                <button className="text-sm text-red-600 hover:text-red-800 font-medium">
+                <button 
+                  onClick={() => handleUnlink(cook.id)}
+                  className="text-sm text-red-600 hover:text-red-800 font-medium px-3 py-1 hover:bg-red-50 rounded-lg transition-colors"
+                >
                   Unlink
                 </button>
               </li>

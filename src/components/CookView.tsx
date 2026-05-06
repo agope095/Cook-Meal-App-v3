@@ -90,8 +90,7 @@ export default function CookView({ ownerId }: CookViewProps) {
 
   const getPhoneticNumber = (val: string, lang: 'Bengali' | 'Hindi') => {
     if (!val) return '';
-    // Check if it's a simple number
-    const num = val.trim();
+    
     const map: Record<string, { bn: string, hi: string }> = {
       '1': { bn: 'Ek', hi: 'Ek' },
       '2': { bn: 'Dui', hi: 'Do' },
@@ -102,9 +101,46 @@ export default function CookView({ ownerId }: CookViewProps) {
       '7': { bn: 'Saat', hi: 'Saat' },
       '8': { bn: 'Aat', hi: 'Aath' },
       '9': { bn: 'Noy', hi: 'Nau' },
-      '10': { bn: 'Dosh', hi: 'Das' }
+      '10': { bn: 'Dosh', hi: 'Das' },
+      '11': { bn: 'Egaro', hi: 'Gyarah' },
+      '12': { bn: 'Baro', hi: 'Baarah' },
+      '15': { bn: 'Ponero', hi: 'Pandrah' },
+      '20': { bn: 'Kuri', hi: 'Bees' },
+      '25': { bn: 'Pochish', hi: 'Pachees' },
+      '50': { bn: 'Ponchaash', hi: 'Pachaas' },
+      '100': { bn: 'Eksho', hi: 'Sau' },
+      '1/2': { bn: 'Adha', hi: 'Aadha' },
+      '0.5': { bn: 'Adha', hi: 'Aadha' },
+      'kg': { bn: 'Kilo', hi: 'Kilo' },
+      'g': { bn: 'Gram', hi: 'Gram' },
+      'gm': { bn: 'Gram', hi: 'Gram' },
+      'gms': { bn: 'Gram', hi: 'Gram' },
+      'cup': { bn: 'Kapp', hi: 'Cup' },
+      'tsp': { bn: 'Chamoch', hi: 'Chammach' },
+      'tbsp': { bn: 'Chamoch', hi: 'Chammach' }
     };
-    return map[num] ? (lang === 'Bengali' ? map[num].bn : map[num].hi) : val;
+
+    // Split by space and also handle cases like "12kg"
+    return val.split(/\s+/).map(word => {
+      const lowerWord = word.toLowerCase();
+      
+      // Direct map hit
+      if (map[lowerWord]) {
+        return lang === 'Bengali' ? map[lowerWord].bn : map[lowerWord].hi;
+      }
+      
+      // Handle "12kg" or "500gm"
+      const match = word.match(/^(\d+|\d+\.\d+|\d+\/\d+)([a-zA-Z]+)$/);
+      if (match) {
+        const num = match[1];
+        const unit = match[2].toLowerCase();
+        const phoneticNum = map[num] ? (lang === 'Bengali' ? map[num].bn : map[num].hi) : num;
+        const phoneticUnit = map[unit] ? (lang === 'Bengali' ? map[unit].bn : map[unit].hi) : unit;
+        return `${phoneticNum} ${phoneticUnit}`;
+      }
+      
+      return word;
+    }).join(' ');
   };
 
   const currentItems = mealPlan ? (selectedMeal === 'lunch' ? mealPlan.lunch : mealPlan.dinner) : [];

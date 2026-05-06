@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, logout } from './firebase';
-import { onAuthStateChanged, User, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { auth, db, logout, loginWithGoogle } from './firebase';
+import { onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, arrayUnion, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import CookView from './components/CookView';
@@ -23,12 +23,17 @@ export default function CookApp() {
     return localStorage.getItem('souschef_active_owner_id');
   });
 
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState<any>(null);
-  const [authStep, setAuthStep] = useState<'phone' | 'otp'>('phone');
+  const [inviteCode, setInviteCode] = useState(searchParams.get('invite') || '');
+  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(!!searchParams.get('invite'));
+
+  // Auth form states
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -56,14 +61,16 @@ export default function CookApp() {
               }
               setHouseholds(houses);
             }
-
-            const urlInvite = searchParams.get('invite');
-            if (urlInvite) {
-              await handleDeepLinkConnect(currentUser, urlInvite);
-            }
           } else {
-            // New cook through phone auth
-            setUserProfile({ name: 'New Cook' });
+            // New cook or uninitialized profile - create it
+            const newProfile = {
+              name: currentUser.displayName || 'New Cook',
+              email: currentUser.email,
+              ownerIds: [],
+              createdAt: new Date().toISOString()
+            };
+            await setDoc(doc(db, 'cooks', currentUser.uid), newProfile);
+            setUserProfile(newProfile);
             setHouseholds([]);
           }
         } catch (err) {
@@ -73,8 +80,6 @@ export default function CookApp() {
         setUser(null);
         setUserProfile(null);
         setHouseholds([]);
-        setAuthStep('phone');
-        setConfirmationResult(null);
       }
       setLoading(false);
     });
@@ -82,104 +87,68 @@ export default function CookApp() {
     return () => unsubscribe();
   }, []);
 
-  const initRecaptcha = () => {
-    if (!(window as any).recaptchaVerifier) {
-      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible',
-        'callback': () => {
-          console.log("reCAPTCHA solved");
-        }
-      });
+  // Standalone effect for Deep Link connection to handle existing sessions
+  useEffect(() => {
+    const urlInvite = searchParams.get('invite');
+    if (user && urlInvite && !loading) {
+      handleDeepLinkConnect(user, urlInvite);
     }
-  };
-
-  const handleSendOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setAuthLoading(true);
-    try {
-      initRecaptcha();
-      const appVerifier = (window as any).recaptchaVerifier;
-      
-      // Ensure phone number starts with + and country code
-      let formattedPhone = phoneNumber.trim();
-      if (!formattedPhone.startsWith('+')) {
-        formattedPhone = '+91' + formattedPhone; // Default to India if no code
-      }
-
-      const result = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-      setConfirmationResult(result);
-      setAuthStep('otp');
-    } catch (err: any) {
-      console.error("OTP Send Error:", err);
-      setError(err.message || "Failed to send OTP. Please check the number.");
-      if ((window as any).recaptchaVerifier) {
-        (window as any).recaptchaVerifier.clear();
-        (window as any).recaptchaVerifier = null;
-      }
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setAuthLoading(true);
-    try {
-      const result = await confirmationResult.confirm(verificationCode);
-      const user = result.user;
-      
-      // Create profile if it doesn't exist
-      const cookRef = doc(db, 'cooks', user.uid);
-      const cookSnap = await getDoc(cookRef);
-      if (!cookSnap.exists()) {
-        await setDoc(cookRef, {
-          phoneNumber: user.phoneNumber,
-          ownerIds: [],
-          createdAt: new Date().toISOString()
-        });
-      }
-    } catch (err: any) {
-      console.error("OTP Verify Error:", err);
-      setError("Invalid code. Please try again.");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
+  }, [user, searchParams, loading]);
 
   const handleDeepLinkConnect = async (currentUser: User, code: string) => {
     try {
       setLoading(true);
-      const inviteRef = doc(db, 'inviteCodes', code.toUpperCase());
+      const inviteRef = doc(db, 'inviteCodes', code.toUpperCase().trim());
       const inviteSnap = await getDoc(inviteRef);
       
-      if (inviteSnap.exists()) {
-        const { ownerId } = inviteSnap.data();
-        const cookRef = doc(db, 'cooks', currentUser.uid);
+      if (!inviteSnap.exists()) {
+        setError('This invite link is invalid or has already been used.');
+        setSearchParams({});
+        setLoading(false);
+        return;
+      }
+
+      const { ownerId } = inviteSnap.data();
+      
+      // 1. Ensure cook profile exists with at least a placeholder
+      const cookRef = doc(db, 'cooks', currentUser.uid);
+      const cookSnap = await getDoc(cookRef);
+      if (!cookSnap.exists()) {
+        await setDoc(cookRef, {
+          name: name || 'New Cook',
+          email: currentUser.email,
+          ownerIds: [ownerId],
+          createdAt: new Date().toISOString()
+        });
+      } else {
         await updateDoc(cookRef, {
           ownerIds: arrayUnion(ownerId),
           updatedAt: new Date().toISOString()
         });
-        await deleteDoc(inviteRef);
-
-        const ownerSnap = await getDoc(doc(db, 'owners', ownerId));
-        if (ownerSnap.exists()) {
-          const data = ownerSnap.data();
-          const newHouse: HouseholdMapping = {
-            ownerId: ownerId,
-            society: data.society || 'Unknown Society',
-            tower: data.tower || '',
-            flat: data.flat || ''
-          };
-          setHouseholds(prev => prev.find(h => h.ownerId === ownerId) ? prev : [...prev, newHouse]);
-          setActiveOwnerId(ownerId);
-        }
       }
+
+      // 2. Consume code
+      await deleteDoc(inviteRef);
+
+      // 3. Update local state
+      const ownerSnap = await getDoc(doc(db, 'owners', ownerId));
+      if (ownerSnap.exists()) {
+        const data = ownerSnap.data();
+        const newHouse: HouseholdMapping = {
+          ownerId: ownerId,
+          society: data.society || 'Unknown Society',
+          tower: data.tower || '',
+          flat: data.flat || ''
+        };
+        setHouseholds(prev => prev.find(h => h.ownerId === ownerId) ? prev : [...prev, newHouse]);
+        setActiveOwnerId(ownerId);
+      }
+      
       setSearchParams({});
       setIsAddingNew(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Deep link connection failed:", err);
+      setError(err.message || 'Failed to connect via link.');
     } finally {
       setLoading(false);
     }
@@ -193,7 +162,32 @@ export default function CookApp() {
     }
   }, [activeOwnerId]);
 
-  const handleConnect = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setAuthLoading(true);
+    try {
+      if (authMode === 'login') {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        if (!name.trim()) throw new Error("Please enter your name");
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Create cook profile immediately
+        await setDoc(doc(db, 'cooks', userCredential.user.uid), {
+          name: name.trim(),
+          email: email,
+          ownerIds: [],
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleManualConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setError('');
@@ -212,10 +206,14 @@ export default function CookApp() {
 
       const { ownerId } = inviteSnap.data();
       const cookRef = doc(db, 'cooks', user.uid);
+      
+      // Update profile
       await updateDoc(cookRef, {
         ownerIds: arrayUnion(ownerId),
         updatedAt: new Date().toISOString()
       });
+      
+      // Invalidate code
       await deleteDoc(inviteRef);
 
       const ownerSnap = await getDoc(doc(db, 'owners', ownerId));
@@ -252,91 +250,103 @@ export default function CookApp() {
     );
   }
 
+  // Auth Screen
   if (!user) {
     return (
       <div className="min-h-screen bg-orange-50 flex flex-col items-center justify-center p-6">
-        <div id="recaptcha-container"></div>
         <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl border border-orange-100 p-8">
           <div className="text-center mb-8">
             <div className="bg-orange-500 w-16 h-16 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-lg rotate-3">
               <Home size={32} />
             </div>
             <h1 className="text-3xl font-black text-gray-900">Cook Portal</h1>
-            <p className="text-gray-500 font-medium">
-              {authStep === 'phone' ? 'Enter your phone to start' : 'Enter the 6-digit code'}
-            </p>
+            <p className="text-gray-500 font-medium">Join a kitchen to start your shift</p>
           </div>
 
-          {authStep === 'phone' ? (
-            <form onSubmit={handleSendOTP} className="space-y-4">
+          <form onSubmit={handleAuth} className="space-y-4">
+            {authMode === 'register' && (
               <div>
-                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Phone Number</label>
+                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Full Name</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">+91</span>
+                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={18} />
                   <input
-                    type="tel"
+                    type="text"
                     required
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    className="w-full pl-14 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-black text-xl tracking-widest"
-                    placeholder="9876543210"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold"
+                    placeholder="Enter your name"
                   />
                 </div>
               </div>
+            )}
 
-              {error && <p className="text-red-500 text-xs font-bold px-1">{error}</p>}
-
-              <button
-                type="submit"
-                disabled={authLoading || phoneNumber.length < 10}
-                className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-600 transition-all shadow-lg hover:shadow-orange-200 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {authLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : (
-                  <>
-                    Send OTP
-                    <ChevronRight size={20} />
-                  </>
-                )}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOTP} className="space-y-4">
-              <div>
-                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Verification Code</label>
+            <div>
+              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={18} />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  autoFocus
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-black text-3xl tracking-[1rem] text-center"
-                  placeholder="000000"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold"
+                  placeholder="cook@example.com"
                 />
               </div>
+            </div>
 
-              {error && <p className="text-red-500 text-xs font-bold px-1 text-center">{error}</p>}
+            <div>
+              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={18} />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
 
-              <button
-                type="submit"
-                disabled={authLoading || verificationCode.length < 6}
-                className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-600 transition-all shadow-lg hover:shadow-orange-200 disabled:opacity-50 flex items-center justify-center"
-              >
-                {authLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : 'Verify & Sign In'}
-              </button>
+            {error && <p className="text-red-500 text-xs font-bold px-1">{error}</p>}
 
-              <button
-                type="button"
-                onClick={() => setAuthStep('phone')}
-                className="w-full text-center text-orange-600 text-sm font-bold hover:underline mt-2"
-              >
-                Change Phone Number
-              </button>
-            </form>
-          )}
+            <button
+              type="submit"
+              disabled={authLoading}
+              className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-600 transition-all shadow-lg hover:shadow-orange-200 disabled:opacity-50 flex items-center justify-center"
+            >
+              {authLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : (authMode === 'login' ? 'Sign In' : 'Create Account')}
+            </button>
+          </form>
 
-          <p className="mt-8 text-[10px] text-gray-400 text-center font-bold uppercase tracking-widest leading-relaxed">
-            By signing in, you agree to receive an SMS for verification. Standard rates apply.
-          </p>
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+              className="text-orange-600 text-sm font-bold hover:underline"
+            >
+              {authMode === 'login' ? "New here? Create an account" : "Already have an account? Sign In"}
+            </button>
+          </div>
+
+          <div className="mt-8 relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-orange-100"></div>
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="px-3 bg-white text-gray-400 font-black uppercase tracking-widest">Or continue with</span>
+            </div>
+          </div>
+
+          <button
+            onClick={loginWithGoogle}
+            className="mt-6 w-full flex items-center justify-center gap-3 bg-white border-2 border-orange-100 py-3.5 rounded-2xl font-bold text-gray-700 hover:bg-orange-50 hover:border-orange-200 transition-all shadow-sm"
+          >
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+            Sign in with Google
+          </button>
         </div>
       </div>
     );
@@ -428,7 +438,7 @@ export default function CookApp() {
             <h2 className="text-2xl font-black text-gray-800 mb-2">Connect Kitchen</h2>
             <p className="text-sm font-medium text-gray-400 mb-8 uppercase tracking-widest">Enter the code from the owner app</p>
             
-            <form onSubmit={handleConnect} className="space-y-6">
+            <form onSubmit={handleManualConnect} className="space-y-6">
               <div>
                 <div className="relative">
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={20} />
@@ -446,10 +456,10 @@ export default function CookApp() {
 
               <button
                 type="submit"
-                disabled={loading || !inviteCode.trim()}
+                disabled={authLoading || !inviteCode.trim()}
                 className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-600 transition-all shadow-lg hover:shadow-orange-200 disabled:opacity-50 flex items-center justify-center gap-3"
               >
-                {loading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : 'Connect & Open Menu'}
+                {authLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : 'Connect & Open Menu'}
               </button>
               
               <div className="flex flex-col gap-2 mt-4">

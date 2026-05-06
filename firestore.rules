@@ -36,7 +36,11 @@ service cloud.firestore {
 
     // Owner Profiles
     match /owners/{userId} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (
+        isSelf(userId) || 
+        isCookOf(userId) || 
+        isPartOfHousehold(userId)
+      );
       allow write: if isSelf(userId);
     }
 
@@ -76,11 +80,17 @@ service cloud.firestore {
       // v4: Only authenticated users can read invite codes
       allow read: if signedIn(); 
       allow write: if signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid));
-      allow delete: if signedIn();
+      // Only the owner who created the code can delete it
+      allow delete: if signedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/owners/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/owners/$(request.auth.uid)).data.joinedHouseholdId == resource.data.ownerId)
+      );
     }
 
     match /cooks/{cookId} {
-      allow read: if isSelf(cookId) || (signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid)));
+      allow read: if isSelf(cookId) || (signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid)) && 
+        request.auth.uid in get(/databases/$(database)/documents/cooks/$(cookId)).data.ownerIds);
       allow write: if isSelf(cookId);
     }
 

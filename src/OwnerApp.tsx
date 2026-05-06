@@ -36,7 +36,6 @@ export default function OwnerApp() {
     // 2. Listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser && !currentUser.isAnonymous) {
-        setUser(currentUser);
         try {
           // Check if they have an owner profile
           const ownerDoc = await getDoc(doc(db, 'owners', currentUser.uid));
@@ -46,15 +45,18 @@ export default function OwnerApp() {
              setHouseholdId(ownerData?.joinedHouseholdId || currentUser.uid);
              setIsOwner(!!(ownerData?.pincode || ownerData?.joinedHouseholdId));
              setUserProfile(ownerData);
+             setUser(currentUser);
            } else {
              setHouseholdId(currentUser.uid);
              setIsOwner(false);
              setUserProfile(null);
+             setUser(currentUser);
            }
         } catch (error) {
           console.error("Owner check failed:", error);
           setHouseholdId(currentUser.uid);
           setIsOwner(false);
+          setUser(currentUser);
         }
       } else {
         setUser(null);
