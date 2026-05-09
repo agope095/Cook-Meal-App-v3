@@ -400,7 +400,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
     }
   };
 
-  const updateItem = (mealType: 'lunch' | 'dinner', id: string, field: keyof MealItem, value: string) => {
+  const updateItem = (mealType: 'lunch' | 'dinner', id: string, field: keyof MealItem, value: any) => {
     const items = mealType === 'lunch' ? lunchItems : dinnerItems;
     const updatedItems = items.map(item => {
       if (item.id === id) {
@@ -880,7 +880,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
 
                     <div className="flex justify-end pt-4">
                       <button
-                        onClick={handleSave}
+                        onClick={() => handleSave(false)}
                         disabled={saving}
                         className="flex items-center bg-[var(--charcoal)] text-white px-10 py-4 rounded-[24px] font-black hover:bg-[var(--charcoal-soft)] transition-all disabled:opacity-50 shadow-xl active:scale-95 group"
                       >

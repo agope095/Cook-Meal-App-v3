@@ -7,7 +7,7 @@ interface Env {
 }
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-type AIAction = 'meal-plan' | 'chat' | 'batch-translate' | 'single-translate' | 'batch-nutrition';
+type AIAction = 'meal-plan' | 'chat' | 'batch-translate' | 'single-translate' | 'generate-grocery' | 'batch-nutrition';
 
 const jsonResponse = (statusCode: number, body: unknown) => new Response(JSON.stringify(body), {
   status: statusCode,
