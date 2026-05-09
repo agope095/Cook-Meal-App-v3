@@ -209,17 +209,6 @@ export default function OwnerApp() {
                              Profile Settings
                            </Link>
                            
-                           <Link
-                             to="/cook"
-                             onClick={() => setIsMenuOpen(false)}
-                             className="flex items-center gap-3 px-5 py-3 text-sm font-bold text-[var(--charcoal)] hover:bg-[var(--cream)] transition-colors"
-                           >
-                             <div className="w-8 h-8 rounded-lg bg-[var(--terracotta)]/10 text-[var(--terracotta)] flex items-center justify-center">
-                               <Home size={18} />
-                             </div>
-                             Switch to Cook
-                           </Link>
-
                            <div className="h-px bg-gray-50 my-2 mx-5"></div>
                            
                            <button

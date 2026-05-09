@@ -205,13 +205,15 @@ export default function VerificationGate({
                   <Mail size={20} />
                   {loading ? 'Sending...' : 'Verify with Email'}
                 </button>
-                <button
-                  onClick={() => setStep('phone-input')}
-                  className="w-full flex items-center justify-center gap-3 py-3 px-4 border-2 border-orange-100 text-orange-600 rounded-xl font-bold hover:bg-orange-50 transition-colors"
-                >
-                  <Phone size={20} />
-                  Verify with Phone
-                </button>
+                {role === 'cook' && (
+                  <button
+                    onClick={() => setStep('phone-input')}
+                    className="w-full flex items-center justify-center gap-3 py-3 px-4 border-2 border-orange-100 text-orange-600 rounded-xl font-bold hover:bg-orange-50 transition-colors"
+                  >
+                    <Phone size={20} />
+                    Verify with Phone
+                  </button>
+                )}
               </>
             )}
 
@@ -309,18 +311,20 @@ export default function VerificationGate({
                     </div>
                   </button>
 
-                  <button
-                    onClick={() => setStep('phone-input')}
-                    className="w-full flex items-center gap-4 p-5 bg-white border-2 border-gray-100 rounded-2xl hover:border-orange-500 transition-all group"
-                  >
-                    <div className="bg-gray-100 p-3 rounded-xl text-gray-400 group-hover:bg-orange-100 group-hover:text-orange-600 transition-colors">
-                      <Phone size={24} />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-black text-gray-800">Phone Verification</p>
-                      <p className="text-sm text-gray-500">Fast OTP verification</p>
-                    </div>
-                  </button>
+                  {role === 'cook' && (
+                    <button
+                      onClick={() => setStep('phone-input')}
+                      className="w-full flex items-center gap-4 p-5 bg-white border-2 border-gray-100 rounded-2xl hover:border-orange-500 transition-all group"
+                    >
+                      <div className="bg-gray-100 p-3 rounded-xl text-gray-400 group-hover:bg-orange-100 group-hover:text-orange-600 transition-colors">
+                        <Phone size={24} />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-black text-gray-800">Phone Verification</p>
+                        <p className="text-sm text-gray-500">Fast OTP verification</p>
+                      </div>
+                    </button>
+                  )}
                 </>
               ) : (
                 <form onSubmit={handleSendOtp} className="space-y-4">

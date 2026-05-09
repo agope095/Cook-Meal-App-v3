@@ -15,6 +15,7 @@ import { AIMealDraft, generateGroceryList } from '../services/geminiService';
 import { addWeeks, subWeeks, addMonths, subMonths } from 'date-fns';
 import DiscoveryView from './DiscoveryView';
 import MealNutritionSummary from './MealNutritionSummary';
+import { generateSecureId } from '../utils/crypto';
 
 interface OwnerDashboardProps {
   householdId: string;
@@ -291,7 +292,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       
       const convertToMealItems = (items: any[]): MealItem[] => {
         return items.map(item => ({
-          id: Math.random().toString(36).substr(2, 9),
+          id: generateSecureId(),
           name: item.name,
           quantity: item.quantity,
           instruction: item.instruction,
@@ -327,7 +328,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
 
   const handleAddFromDiscovery = (item: Partial<MealItem>) => {
     const newItem: MealItem = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generateSecureId(),
       name: item.name || '',
       quantity: '',
       instruction: '',
@@ -364,8 +365,8 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
             date: targetDate,
             // Strip out IDs to avoid conflicts if needed, but since they are unique per item, it's fine.
             // However, we should generate new IDs to treat them as fresh entries.
-            lunch: sourcePlan.lunch.map(item => ({ ...item, id: Math.random().toString(36).substr(2, 9) })),
-            dinner: sourcePlan.dinner.map(item => ({ ...item, id: Math.random().toString(36).substr(2, 9) }))
+            lunch: sourcePlan.lunch.map(item => ({ ...item, id: generateSecureId() })),
+            dinner: sourcePlan.dinner.map(item => ({ ...item, id: generateSecureId() }))
           });
         }
       }
@@ -382,7 +383,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
 
   const addItem = (mealType: 'lunch' | 'dinner') => {
     const newItem: MealItem = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generateSecureId(),
       name: '',
       quantity: '',
       bengaliQuantity: '',
@@ -831,8 +832,8 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                   const snap = await getDoc(doc(db, 'mealPlans', `${householdId}_${dateStr}`));
                   if (snap.exists()) {
                     const data = snap.data() as MealPlan;
-                    setLunchItems(data.lunch.map(i => ({ ...i, id: Math.random().toString(36).substr(2, 9) })));
-                    setDinnerItems(data.dinner.map(i => ({ ...i, id: Math.random().toString(36).substr(2, 9) })));
+                    setLunchItems(data.lunch.map(i => ({ ...i, id: generateSecureId() })));
+                    setDinnerItems(data.dinner.map(i => ({ ...i, id: generateSecureId() })));
                   } else {
                     alert("No meal plan found for yesterday.");
                   }
