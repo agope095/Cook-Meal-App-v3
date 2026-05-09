@@ -1,14 +1,16 @@
 import React from 'react';
 import { MealItem } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, Zap, PieChart, Info } from 'lucide-react';
+import { Activity, Users } from 'lucide-react';
+import { deriveServingContext } from '../services/nutritionService';
 
 interface MealNutritionSummaryProps {
   lunch: MealItem[];
   dinner: MealItem[];
+  householdSize?: number;
 }
 
-export default function MealNutritionSummary({ lunch, dinner }: MealNutritionSummaryProps) {
+export default function MealNutritionSummary({ lunch, dinner, householdSize = 2 }: MealNutritionSummaryProps) {
   const allItems = [...lunch, ...dinner].filter(item => item.nutrition);
   
   if (allItems.length === 0) {
@@ -27,12 +29,8 @@ export default function MealNutritionSummary({ lunch, dinner }: MealNutritionSum
     );
   }
 
-  const totals = allItems.reduce((acc, item) => ({
-    kcal: Math.round(acc.kcal + (item.nutrition?.kcal || 0)),
-    protein: Math.round(acc.protein + (item.nutrition?.protein || 0)),
-    carbs: Math.round(acc.carbs + (item.nutrition?.carbs || 0)),
-    fat: Math.round(acc.fat + (item.nutrition?.fat || 0)),
-  }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+  // Derive both household totals and per-person via nutrition service
+  const { householdTotal: totals, perPerson, inferredServings, hasServingData } = deriveServingContext(allItems, householdSize);
 
   // Calculate percentages based on calories
   const proteinKcal = totals.protein * 4;
@@ -65,10 +63,6 @@ export default function MealNutritionSummary({ lunch, dinner }: MealNutritionSum
       animate={{ opacity: 1, y: 0 }}
       className="mt-4 mb-6 bg-[var(--cream)]/70 backdrop-blur-xl rounded-[28px] p-5 border border-white shadow-lg relative overflow-hidden"
     >
-      <div className="absolute top-0 right-0 p-4 opacity-5">
-        <PieChart size={80} />
-      </div>
-
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
@@ -89,9 +83,19 @@ export default function MealNutritionSummary({ lunch, dinner }: MealNutritionSum
             <div className="text-3xl font-[var(--font-display)] font-bold text-[var(--charcoal)] leading-none">
               {totals.kcal}
             </div>
-            <div className="text-[9px] font-black uppercase tracking-widest text-[var(--warm-gray)] mt-1 opacity-60">
-              of ~2,000 kcal target
-            </div>
+            {/* Per-person context line — muted secondary, shown when serving data is available */}
+            {perPerson && inferredServings ? (
+              <div className="flex items-center justify-end gap-1 mt-1">
+                <Users size={9} className="text-[var(--warm-gray)] opacity-50" />
+                <div className="text-[9px] font-black uppercase tracking-widest text-[var(--warm-gray)] opacity-60">
+                  ~{perPerson.kcal} kcal · {inferredServings} {inferredServings === 1 ? 'person' : 'people'}
+                </div>
+              </div>
+            ) : (
+              <div className="text-[9px] font-black uppercase tracking-widest text-[var(--warm-gray)] mt-1 opacity-60">
+                of ~2,000 kcal target
+              </div>
+            )}
           </div>
         </div>
 
@@ -164,16 +168,31 @@ export default function MealNutritionSummary({ lunch, dinner }: MealNutritionSum
               <div className="text-[10px] font-black uppercase tracking-widest text-[var(--terracotta)] mb-0.5">
                 Protein {totals.protein}g
               </div>
+              {perPerson && (
+                <div className="text-[8px] text-[var(--warm-gray)] opacity-60 font-semibold">
+                  ~{perPerson.protein}g/person
+                </div>
+              )}
             </div>
             <div className="bg-white/40 p-2.5 rounded-xl border border-white/60">
               <div className="text-[10px] font-black uppercase tracking-widest text-[var(--sage)] mb-0.5">
                 Carbs {totals.carbs}g
               </div>
+              {perPerson && (
+                <div className="text-[8px] text-[var(--warm-gray)] opacity-60 font-semibold">
+                  ~{perPerson.carbs}g/person
+                </div>
+              )}
             </div>
             <div className="bg-white/40 p-2.5 rounded-xl border border-white/60">
               <div className="text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-0.5">
                 Fats {totals.fat}g
               </div>
+              {perPerson && (
+                <div className="text-[8px] text-[var(--warm-gray)] opacity-60 font-semibold">
+                  ~{perPerson.fat}g/person
+                </div>
+              )}
             </div>
           </div>
         </div>

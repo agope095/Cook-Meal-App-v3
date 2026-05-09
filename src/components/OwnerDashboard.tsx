@@ -3,9 +3,10 @@ import { doc, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch, collection, que
 import { db, auth } from '../firebase';
 import { format, addDays, subDays } from 'date-fns';
 import { MealPlan, MealItem } from '../types';
-import { Plus, Trash2, Calendar as CalendarIcon, Save, Youtube, ChevronLeft, ChevronRight, Upload, FileText, Download, Sparkles, Heart, CheckCircle2, MessageSquare, Clock, Search, Activity, Zap, PieChart, ShoppingCart, Loader2, X, Share2 } from 'lucide-react';
+import { Plus, Trash2, Calendar as CalendarIcon, Save, Youtube, ChevronLeft, ChevronRight, Upload, FileText, Download, Sparkles, Heart, CheckCircle2, MessageSquare, Clock, Search, Activity, Zap, PieChart, ShoppingCart, Loader2, X, Share2, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { processMealItems, syncHistoricalData, syncNutritionForLibrary, SyncProgress, scaleNutrition } from '../services/recipeService';
+import { detectServingAnomaly, AnomalyResult } from '../services/nutritionService';
 import AIMealPlanner from './AIMealPlanner';
 import FavoritesView from './FavoritesView';
 import WeeklyView from './WeeklyView';
@@ -35,6 +36,8 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
   const [isGeneratingGroceries, setIsGeneratingGroceries] = useState(false);
   const [syncingNutrition, setSyncingNutrition] = useState(false);
   const [nutritionSyncProgress, setNutritionSyncProgress] = useState<{ total: number, processed: number, updated: number } | null>(null);
+  const [servingAnomaly, setServingAnomaly] = useState<AnomalyResult | null>(null);
+  const [pendingSaveAfterAnomaly, setPendingSaveAfterAnomaly] = useState(false);
 
   const handleGenerateGroceries = async () => {
     const allMeals = [...lunchItems, ...dinnerItems].filter(m => m.name.trim() !== '');
@@ -218,8 +221,20 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
     }
   }, [viewMode, selectedDate, householdId]);
 
-  const handleSave = async () => {
+  const handleSave = async (skipAnomalyCheck = false) => {
     if (!auth.currentUser || !householdId) return;
+
+    // Anomaly check before saving — only run once per save attempt
+    if (!skipAnomalyCheck) {
+      const householdSize = userProfile?.householdSize ?? 2;
+      const allItems = [...lunchItems, ...dinnerItems];
+      const anomaly = detectServingAnomaly(allItems, householdSize);
+      if (anomaly) {
+        setServingAnomaly(anomaly);
+        setPendingSaveAfterAnomaly(true);
+        return; // Pause here — user must confirm or dismiss
+      }
+    }
     
     setSaving(true);
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -852,7 +867,11 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                 ) : (
                   <div className="space-y-4">
                     {viewMode === 'daily' && (
-                <MealNutritionSummary lunch={lunchItems} dinner={dinnerItems} />
+                <MealNutritionSummary 
+                  lunch={lunchItems} 
+                  dinner={dinnerItems} 
+                  householdSize={userProfile?.householdSize ?? 2}
+                />
               )}
 
               {renderMealSection('lunch', lunchItems)}
@@ -1072,6 +1091,75 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Serving Anomaly Nudge — Soft, non-blocking confirmation */}
+      <AnimatePresence>
+        {servingAnomaly && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { setServingAnomaly(null); setPendingSaveAfterAnomaly(false); }}
+              className="absolute inset-0 bg-[var(--charcoal)]/20 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 24 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 24 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="relative bg-[var(--cream)] rounded-[32px] shadow-2xl border border-white p-6 max-w-sm w-full"
+            >
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-9 h-9 rounded-xl bg-[var(--terracotta)]/10 flex items-center justify-center shrink-0">
+                  <Users size={18} className="text-[var(--terracotta)]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-[var(--font-display)] font-bold text-[var(--charcoal)] mb-1">Serving Check</h3>
+                  <p className="text-[11px] text-[var(--warm-gray)] leading-relaxed">{servingAnomaly.message}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    // User confirms the implied serving count — update items
+                    const updateServings = (items: MealItem[]) =>
+                      items.map(item => item.nutrition?.servings != null
+                        ? { ...item, nutrition: { ...item.nutrition, servings: servingAnomaly.impliedServings } }
+                        : item
+                      );
+                    setLunchItems(updateServings(lunchItems));
+                    setDinnerItems(updateServings(dinnerItems));
+                    setServingAnomaly(null);
+                    setPendingSaveAfterAnomaly(false);
+                    handleSave(true);
+                  }}
+                  className="text-[10px] font-black uppercase tracking-widest bg-[var(--charcoal)] text-white py-3 rounded-2xl hover:bg-[var(--charcoal-soft)] transition-all active:scale-95"
+                >
+                  Yes, {servingAnomaly.impliedServings} people
+                </button>
+                <button
+                  onClick={() => {
+                    setServingAnomaly(null);
+                    setPendingSaveAfterAnomaly(false);
+                    handleSave(true);
+                  }}
+                  className="text-[10px] font-black uppercase tracking-widest bg-white text-[var(--charcoal)] py-3 rounded-2xl border border-[var(--cream-dark)] hover:shadow-md transition-all active:scale-95"
+                >
+                  No, {servingAnomaly.householdSize} people
+                </button>
+              </div>
+              <button
+                onClick={() => { setServingAnomaly(null); setPendingSaveAfterAnomaly(false); }}
+                className="w-full mt-2 text-[9px] font-black uppercase tracking-widest text-[var(--warm-gray)] opacity-60 hover:opacity-100 py-1 transition-all"
+              >
+                Dismiss
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showGroceryModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">

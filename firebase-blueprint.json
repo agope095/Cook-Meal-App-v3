@@ -10,7 +10,36 @@
         "quantity": { "type": "string" },
         "videoUrl": { "type": "string" },
         "bengaliName": { "type": "string" },
-        "bengaliVideoUrl": { "type": "string" }
+        "bengaliVideoUrl": { "type": "string" },
+        "nutrition": {
+          "type": "object",
+          "description": "Nutritional values for the planned quantity. All values are for the total household batch.",
+          "properties": {
+            "kcal": { "type": "number" },
+            "protein": { "type": "number" },
+            "carbs": { "type": "number" },
+            "fat": { "type": "number" },
+            "per100g": {
+              "type": "object",
+              "description": "AI-derived baseline nutrition per 100g of the cooked dish. Used for local recalculation when quantity changes — no AI call needed.",
+              "properties": {
+                "kcal": { "type": "number" },
+                "protein": { "type": "number" },
+                "carbs": { "type": "number" },
+                "fat": { "type": "number" }
+              }
+            },
+            "servingGrams": {
+              "type": "number",
+              "description": "Estimated total weight in grams for the specified quantity. AI-derived at write-time."
+            },
+            "servings": {
+              "type": "number",
+              "description": "Number of persons this quantity is intended for. AI-inferred from context (e.g. 'for 2 people'). Used for per-person nutrition display."
+            }
+          },
+          "required": ["kcal", "protein", "carbs", "fat"]
+        }
       },
       "required": ["id", "name"]
     },
@@ -45,6 +74,52 @@
         "lastUpdated": { "type": "number" }
       },
       "required": ["id", "name", "bengaliName", "videoUrl", "bengaliVideoUrl", "lastUpdated"]
+    },
+    "CommunityRecipeItem": {
+      "title": "CommunityRecipeItem",
+      "description": "Shared nutrition intelligence cache. Populated automatically when owners save dishes with AI-enriched nutrition. Used to skip AI calls for subsequent households adding the same dish.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Lowercase, underscore-separated dish name slug." },
+        "name": { "type": "string" },
+        "nutrition_per100g": {
+          "type": "object",
+          "description": "Per-100g nutrition baseline. Shared across all households.",
+          "properties": {
+            "kcal": { "type": "number" },
+            "protein": { "type": "number" },
+            "carbs": { "type": "number" },
+            "fat": { "type": "number" }
+          }
+        },
+        "typicalServingGrams": {
+          "type": "number",
+          "description": "Running average of grams per serving across contributing households. Gets more accurate over time."
+        },
+        "contributorCount": {
+          "type": "number",
+          "description": "Number of households that have contributed to this entry. Used for running average calculation."
+        },
+        "lastUpdated": { "type": "number" }
+      },
+      "required": ["id", "name", "nutrition_per100g", "typicalServingGrams", "contributorCount", "lastUpdated"]
+    },
+    "OwnerProfile": {
+      "title": "OwnerProfile",
+      "description": "Profile for a household owner.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "householdSize": {
+          "type": "number",
+          "description": "Number of people in the household. Default: 2. Used as fallback for per-person nutrition when servings data is unavailable, and as the baseline for anomaly detection."
+        },
+        "dietaryPreference": { "type": "string", "enum": ["veg", "non-veg", "egg"] },
+        "viewPreference": { "type": "string", "enum": ["casual", "power"] },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "name"]
     }
   },
   "firestore": {
@@ -59,6 +134,18 @@
         "$ref": "#/entities/RecipeDictionaryItem"
       },
       "description": "Collection of cached recipe translations and video URLs."
+    },
+    "/communityRecipes/{id}": {
+      "schema": {
+        "$ref": "#/entities/CommunityRecipeItem"
+      },
+      "description": "Shared nutrition intelligence cache. Write-time populated from any household, read by all. Reduces AI calls for common dishes."
+    },
+    "/owners/{uid}": {
+      "schema": {
+        "$ref": "#/entities/OwnerProfile"
+      },
+      "description": "Household owner profiles including householdSize for per-person nutrition context."
     }
   }
 }

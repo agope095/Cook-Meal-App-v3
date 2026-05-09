@@ -199,7 +199,7 @@ SCHEMA: Return ONLY a JSON array of objects with this EXACT structure:
     "nutrition": { "kcal": number, "protein": number, "carbs": number, "fat": number }
   }]
 }]
-If no items for lunch/dinner, return an empty array []. Keep suggestions healthy and balanced. Use high-quality ${cookLanguage} script. QUANTITY RULE: If a quantity is mentioned, calculate nutrition for that amount. Otherwise, estimate based on typical portion sizes.`;
+If no items for lunch/dinner, return an empty array []. Keep suggestions healthy and balanced. Use high-quality ${cookLanguage} script. QUANTITY RULE: If a quantity is mentioned, calculate nutrition for that amount. Otherwise, estimate based on typical portion sizes. SERVING INTELLIGENCE: For each item, also return inside "nutrition": "per100g" (nutrition per 100g of the cooked dish as {kcal, protein, carbs, fat}), "servingGrams" (estimated total weight in grams for the quantity specified), and "servings" (integer number of persons the quantity is intended for — infer from context like "for 2 people", "4 portions"; default to 1 if unclear).`;
 
       if (pastMeals) systemInstruction += `\nPast meals:\n${pastMeals}`;
       if (favorites?.length) systemInstruction += `\nFavorites:\n${favorites.join(', ')}`;
@@ -299,8 +299,9 @@ Return ONLY a JSON array of strings, where each string is an item and its approx
       const prompt = `Estimate nutritional values for the following dishes. 
 STRICT RULE: You MUST return the EXACT "id" provided for each dish.
 QUANTITY RULE: If a quantity is mentioned (e.g., "6 roti" or "for 2 people"), calculate for the ENTIRE amount. If no quantity is mentioned, assume a standard single serving.
+SERVING INTELLIGENCE: Also return "per100g" (nutrition per 100g of the cooked dish), "servingGrams" (estimated total weight in grams for the quantity specified), and "servings" (integer number of persons the quantity is intended for — default 1 if unclear).
 Items: ${JSON.stringify(items)}
-Structure: [{"id": "...", "name": "...", "kcal": number, "protein": number, "carbs": number, "fat": number}]`;
+Structure: [{"id": "...", "name": "...", "kcal": number, "protein": number, "carbs": number, "fat": number, "per100g": {"kcal": number, "protein": number, "carbs": number, "fat": number}, "servingGrams": number, "servings": number}]`;
       
       let rawText = '';
       try {

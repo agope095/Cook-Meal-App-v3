@@ -20,6 +20,15 @@ export interface MealItem {
     protein: number;
     carbs: number;
     fat: number;
+    // Serving intelligence — stored at write-time, used for local recalculation
+    per100g?: {
+      kcal: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+    };
+    servingGrams?: number;   // Total grams for the quantity specified (AI-inferred)
+    servings?: number;       // Number of persons this quantity is intended for
   };
   baseQuantity?: string;
   baseNutrition?: {
@@ -51,6 +60,7 @@ export interface OwnerProfile {
   cookLanguage: 'Bengali' | 'Hindi';
   email: string;
   dietaryPreference?: 'veg' | 'non-veg' | 'egg';
+  householdSize?: number;   // Default: 2. Used for per-person nutrition context.
   updatedAt: string;
   authorizedEmails?: string[];
   authorizedUids?: string[];
