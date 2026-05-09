@@ -173,7 +173,11 @@ export default function CookView({ ownerId }: CookViewProps) {
       {/* Date Navigator */}
       <div className="bg-white rounded-[32px] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-[var(--cream-dark)]">
         <div className="flex items-center justify-between gap-4">
-          <button onClick={() => setSelectedDate(subDays(selectedDate, 1))} className="p-3 bg-[var(--cream)] rounded-2xl text-[var(--charcoal-soft)] hover:bg-[var(--cream-dark)] transition-colors shadow-inner">
+          <button
+            onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+            className="p-3 bg-[var(--cream)] rounded-2xl text-[var(--charcoal-soft)] hover:bg-[var(--cream-dark)] transition-colors shadow-inner focus-visible:ring-2 focus-visible:ring-[var(--terracotta)] outline-none"
+            aria-label="Previous day"
+          >
             <ChevronLeft size={24} />
           </button>
           <div className="flex-1 text-center">
@@ -182,7 +186,11 @@ export default function CookView({ ownerId }: CookViewProps) {
               {isViewingToday ? translations.today : format(selectedDate, 'MMMM do')}
             </h2>
           </div>
-          <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-3 bg-[var(--cream)] rounded-2xl text-[var(--charcoal-soft)] hover:bg-[var(--cream-dark)] transition-colors shadow-inner">
+          <button
+            onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+            className="p-3 bg-[var(--cream)] rounded-2xl text-[var(--charcoal-soft)] hover:bg-[var(--cream-dark)] transition-colors shadow-inner focus-visible:ring-2 focus-visible:ring-[var(--terracotta)] outline-none"
+            aria-label="Next day"
+          >
             <ChevronRight size={24} />
           </button>
         </div>
@@ -242,7 +250,8 @@ export default function CookView({ ownerId }: CookViewProps) {
                       <div className="flex items-center gap-4">
                         <button 
                           onClick={() => handleTogglePrepared(item.id)}
-                          className={`shrink-0 transition-all ${item.prepared ? 'text-[var(--sage)] scale-110' : 'text-gray-200 hover:text-[var(--terracotta)]'}`}
+                          className={`shrink-0 transition-all focus-visible:ring-2 focus-visible:ring-[var(--terracotta)] outline-none rounded-full ${item.prepared ? 'text-[var(--sage)] scale-110' : 'text-gray-200 hover:text-[var(--terracotta)]'}`}
+                          aria-label={item.prepared ? `Mark ${displayName} as unprepared` : `Mark ${displayName} as prepared`}
                         >
                           {item.prepared ? <CheckCircle2 size={32} /> : <Circle size={32} strokeWidth={2} />}
                         </button>
@@ -327,7 +336,8 @@ export default function CookView({ ownerId }: CookViewProps) {
                                   input.value = '';
                                 }
                               }}
-                              className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] hover:text-[var(--terracotta-deep)] transition-colors"
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] hover:text-[var(--terracotta-deep)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--terracotta)] outline-none rounded-md"
+                              aria-label={`Save note for ${displayName}`}
                             >
                               <Save size={18} />
                             </button>

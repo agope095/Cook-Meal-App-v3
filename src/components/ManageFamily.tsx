@@ -235,7 +235,12 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
                         </div>
                         <span className="text-sm font-bold text-[var(--charcoal)]">{email}</span>
                       </div>
-                      <button onClick={() => removeInvite(email)} className="text-[var(--warm-gray)] hover:text-red-500 p-2 transition-colors">
+                      <button
+                        onClick={() => removeInvite(email)}
+                        className="text-[var(--warm-gray)] hover:text-red-500 p-2 transition-colors focus-visible:ring-2 focus-visible:ring-red-500 rounded-lg outline-none"
+                        aria-label={`Remove pending invite for ${email}`}
+                        title="Remove invite"
+                      >
                         <Trash2 size={18} />
                       </button>
                     </div>
@@ -259,7 +264,12 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
                           <p className="text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] opacity-60">{user.email}</p>
                         </div>
                       </div>
-                      <button onClick={() => removeUser(user.uid)} className="text-[var(--warm-gray)] hover:text-red-500 p-2 transition-colors">
+                      <button
+                        onClick={() => removeUser(user.uid)}
+                        className="text-[var(--warm-gray)] hover:text-red-500 p-2 transition-colors focus-visible:ring-2 focus-visible:ring-red-500 rounded-lg outline-none"
+                        aria-label={`Remove access for ${user.email}`}
+                        title="Remove user"
+                      >
                         <Trash2 size={18} />
                       </button>
                     </div>
@@ -316,7 +326,9 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
                 </div>
                 <button
                   onClick={() => removeMember(member.id)}
-                  className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                  className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-red-500 outline-none"
+                  aria-label={`Delete family member profile for ${member.name}`}
+                  title="Delete member"
                 >
                   <Trash2 size={18} />
                 </button>
