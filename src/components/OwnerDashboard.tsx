@@ -11,6 +11,7 @@ import { getYouTubeVideoId } from '../services/youtubeService';
 import AIMealPlanner from './AIMealPlanner';
 import FavoritesView from './FavoritesView';
 import { AIMealDraft } from '../services/geminiService';
+import { generateId } from '../utils/crypto';
 
 interface OwnerDashboardProps {
   householdId: string;
@@ -406,7 +407,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       
       const convertToMealItems = (items: any[]): MealItem[] => {
         return items.map(item => ({
-          id: Math.random().toString(36).substr(2, 9),
+          id: generateId(),
           name: item.name,
           quantity: item.quantity,
           instruction: item.instruction,
@@ -475,7 +476,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
             }
             
             const item: MealItem = {
-              id: Math.random().toString(36).substr(2, 9),
+              id: generateId(),
               name,
               bengaliName: bengaliName || '',
               quantity: quantity || '',
@@ -629,7 +630,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
 
   const addItem = (mealType: 'lunch' | 'dinner') => {
     const newItem: MealItem = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generateId(),
       name: '',
       quantity: '',
       bengaliQuantity: '',

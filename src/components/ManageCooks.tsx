@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, setDoc, doc, deleteDoc, onSnapshot, updateDoc, arrayRemove } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Users, UserPlus, Key, Trash2, CheckCircle, Copy, Share2, MessageCircle } from 'lucide-react';
+import { generateSecureCode } from '../utils/crypto';
 
 interface InviteCode {
   code: string;
@@ -62,7 +63,7 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
     setGenerating(true);
     
     try {
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const code = generateSecureCode(6);
       await setDoc(doc(db, 'inviteCodes', code), {
         ownerId: householdId,
         createdAt: new Date().toISOString(),
