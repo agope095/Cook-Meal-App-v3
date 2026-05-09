@@ -74,7 +74,14 @@ export default function ChatAssistant({ householdId }: ChatAssistantProps) {
       const pastMeals = await getPastMeals(householdId, new Date(), 30);
       const favorites = await getFavorites(householdId);
       const response = await chatWithCulinaryAssistant(newMessages, userProfile, pastMeals, favorites);
-      setMessages([...newMessages, { role: 'assistant', content: response }]);
+
+      setMessages([...newMessages, { role: 'assistant', content: response.reply }]);
+
+      if (response.addToPlan && response.addToPlan.date && response.addToPlan.meal) {
+        // Dispatch an event so OwnerDashboard can pick it up and append to the plan
+        const event = new CustomEvent('aiAddMealToPlan', { detail: response.addToPlan });
+        window.dispatchEvent(event);
+      }
     } catch (error) {
       console.error("Chat error:", error);
       setMessages([...newMessages, { role: 'assistant', content: "Sorry, I encountered an error. Please try again." }]);

@@ -28,8 +28,10 @@ export interface AIMealItemDraft {
 
 export interface AIMealDraft {
   date: string;
-  lunch: AIMealItemDraft[];
-  dinner: AIMealItemDraft[];
+  breakfast?: AIMealItemDraft[];
+  lunch?: AIMealItemDraft[];
+  snacks?: AIMealItemDraft[];
+  dinner?: AIMealItemDraft[];
 }
 
 async function callAI<T>(payload: Record<string, unknown>, userProfile?: { name?: string, city?: string, cookLanguage?: string }): Promise<T> {
@@ -100,7 +102,7 @@ async function callAI<T>(payload: Record<string, unknown>, userProfile?: { name?
 export async function generateMealPlanDraft(
   prompt: string,
   startDate: string,
-  userProfile?: { name?: string, city?: string, cookLanguage?: string },
+  userProfile?: { name?: string, city?: string, cookLanguage?: string, plannedMeals?: string[] },
   existingDraft?: AIMealDraft[],
   pastMeals?: string,
   favorites?: string[]
@@ -112,7 +114,17 @@ export async function generateMealPlanDraft(
     existingDraft,
     pastMeals,
     favorites,
+    plannedMeals: userProfile?.plannedMeals || ['lunch', 'dinner'],
   }, userProfile);
+}
+
+export interface ChatResponse {
+  reply: string;
+  addToPlan?: {
+    date: string;
+    meal: 'breakfast' | 'lunch' | 'snacks' | 'dinner';
+    items: { name: string; quantity: string; instruction: string }[];
+  };
 }
 
 export async function chatWithCulinaryAssistant(
@@ -120,14 +132,64 @@ export async function chatWithCulinaryAssistant(
   userProfile?: { name?: string, city?: string, cookLanguage?: string },
   pastMeals?: string,
   favorites?: string[]
-): Promise<string> {
-  return callAI<string>({
+): Promise<ChatResponse> {
+  // callAI returns result.data which is the text reply.
+  // We need a custom fetch here to extract addToPlan from the raw response, since callAI only returns `data`
+  const token = await auth.currentUser?.getIdToken();
+
+  let culinaryMemory = '';
+  if (auth.currentUser) {
+    try {
+      const { doc, getDoc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+      const snap = await getDoc(doc(db, 'owners', auth.currentUser.uid));
+      if (snap.exists()) {
+        culinaryMemory = snap.data().culinaryMemory || '';
+      }
+    } catch (e) {
+      console.warn("Memory fetch failed", e);
+    }
+  }
+
+  const response = await fetch('/api/ai', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token || ''}`,
+    },
+    body: JSON.stringify({
     action: 'chat',
     messages,
     pastMeals,
     favorites,
     currentDate: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  }, userProfile);
+  , userProfile, culinaryMemory }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `AI request failed with status ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (auth.currentUser) {
+    const { doc, updateDoc } = await import('firebase/firestore');
+    const { db } = await import('../firebase');
+    const ownerRef = doc(db, 'owners', auth.currentUser.uid);
+
+    if (result.summarizedMemory) {
+       await updateDoc(ownerRef, { culinaryMemory: result.summarizedMemory });
+    } else if (result.memoryUpdate) {
+       const newMemory = (culinaryMemory ? culinaryMemory + '. ' : '') + result.memoryUpdate;
+       await updateDoc(ownerRef, { culinaryMemory: newMemory });
+    }
+  }
+
+  return {
+    reply: result.data || '',
+    addToPlan: result.addToPlan
+  };
 }
 
 
