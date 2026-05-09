@@ -112,6 +112,14 @@ export default function CookApp() {
     return () => {
       unsubscribeAuth();
       if (unsubscribeProfile) unsubscribeProfile();
+      if ((window as any).recaptchaVerifier) {
+        try {
+          (window as any).recaptchaVerifier.clear();
+          (window as any).recaptchaVerifier = null;
+        } catch (e) {
+          console.warn("Recaptcha cleanup error", e);
+        }
+      }
     };
   }, []);
 
@@ -236,7 +244,12 @@ export default function CookApp() {
   };
 
   const setupRecaptcha = () => {
-    if ((window as any).recaptchaVerifier) return;
+    if ((window as any).recaptchaVerifier) {
+      try {
+        (window as any).recaptchaVerifier.clear();
+        (window as any).recaptchaVerifier = null;
+      } catch (e) {}
+    }
     try {
       (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         'size': 'invisible',

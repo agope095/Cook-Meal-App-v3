@@ -124,7 +124,12 @@ export default function VerificationGate({
   };
 
   const setupRecaptcha = () => {
-    if ((window as any).recaptchaVerifier) return;
+    if ((window as any).recaptchaVerifier) {
+      try {
+        (window as any).recaptchaVerifier.clear();
+        (window as any).recaptchaVerifier = null;
+      } catch (e) {}
+    }
     try {
       (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         'size': 'invisible',
