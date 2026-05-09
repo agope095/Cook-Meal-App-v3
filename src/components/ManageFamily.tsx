@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Users, Plus, Trash2, Save, CheckCircle, Mail, UserCheck } from 'lucide-react';
+import { motion } from 'motion/react';
 
 interface FamilyMember {
   id: string;
@@ -109,7 +110,8 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
       const ownerRef = doc(db, 'owners', householdId);
       await setDoc(ownerRef, {
         authorizedUsers: arrayRemove(userToRemove),
-        authorizedEmails: arrayRemove(userToRemove.email.toLowerCase())
+        authorizedEmails: arrayRemove(userToRemove.email.toLowerCase()),
+        authorizedUids: arrayRemove(uid)
       }, { merge: true });
       setAuthorizedUsers(prev => prev.filter(u => u.uid !== uid));
     } catch (error) {
@@ -158,23 +160,32 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
   };
 
   if (loading) {
-    return <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div></div>;
+    return (
+      <div className="p-12 text-center">
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="rounded-full h-10 w-10 border-4 border-[var(--terracotta)] border-t-transparent mx-auto shadow-lg"
+        />
+      </div>
+    );
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-      <div className="p-6 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800 flex items-center">
-            <Users className="mr-2 text-indigo-500" />
+    <div className="bg-white/40 backdrop-blur-md rounded-[32px] shadow-sm border border-white/60 overflow-hidden mb-8 group">
+      <div className="p-8 border-b border-[var(--cream-dark)]/50 flex justify-between items-center relative overflow-hidden">
+        <div className="absolute -right-12 -top-12 w-32 h-32 bg-[var(--sage)]/5 rounded-full blur-2xl" />
+        <div className="relative z-10">
+          <h2 className="text-2xl font-[var(--font-display)] font-bold text-[var(--charcoal)] flex items-center">
+            <Users className="mr-3 text-[var(--sage)]" />
             Family Members
           </h2>
-          <p className="text-gray-500 text-sm mt-1">Add family members and their dietary preferences for your cook to see.</p>
+          <p className="text-[var(--warm-gray)] text-xs font-bold uppercase tracking-widest mt-1 opacity-60">Dietary Profiles & Collaboration</p>
         </div>
         {success && (
-          <div className="flex items-center text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm font-medium">
-            <CheckCircle size={16} className="mr-1" /> Saved
-          </div>
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center text-[var(--sage)] bg-[var(--sage)]/5 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-[var(--sage)]/10">
+            <CheckCircle size={14} className="mr-1.5" /> Saved
+          </motion.div>
         )}
       </div>
 
@@ -189,21 +200,24 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
             Invite up to 4 family members to manage meal plans with you. They must log in with the email address you invite.
           </p>
 
-          <div className="flex gap-3 mb-8">
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="family-member@email.com"
-              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500"
-              disabled={authorizedEmails.length + authorizedUsers.length >= 4}
-            />
+          <div className="flex flex-col sm:flex-row gap-3 mb-10">
+            <div className="relative flex-1 group">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--sage)] opacity-40 group-focus-within:opacity-100 transition-all" size={18} />
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="family-member@email.com"
+                className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-[var(--cream)]/30 border-2 border-transparent focus:border-[var(--sage)]/20 focus:bg-white focus:outline-none transition-all font-bold text-[var(--charcoal)] shadow-inner"
+                disabled={authorizedEmails.length + authorizedUsers.length >= 4}
+              />
+            </div>
             <button
               onClick={sendInvite}
               disabled={inviting || !inviteEmail.trim() || authorizedEmails.length + authorizedUsers.length >= 4}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50 flex items-center"
+              className="px-8 py-3.5 bg-[var(--charcoal)] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-[var(--charcoal-soft)] disabled:opacity-50 flex items-center justify-center shadow-lg transition-all active:scale-95"
             >
-              <Plus size={18} className="mr-1" />
+              <Plus size={18} className="mr-2 text-[var(--sage)]" />
               Invite
             </button>
           </div>
@@ -214,10 +228,15 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
                 <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Pending Invites</h4>
                 <div className="space-y-2">
                   {authorizedEmails.map(email => (
-                    <div key={email} className="flex items-center justify-between bg-orange-50 p-3 rounded-lg border border-orange-100">
-                      <span className="text-sm font-medium text-orange-800">{email}</span>
-                      <button onClick={() => removeInvite(email)} className="text-red-500 hover:text-red-700">
-                        <Trash2 size={16} />
+                    <div key={email} className="flex items-center justify-between bg-[var(--terracotta)]/5 p-4 rounded-2xl border border-[var(--terracotta)]/10 group/invite">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-[var(--terracotta)] shadow-sm">
+                           <Mail size={14} />
+                        </div>
+                        <span className="text-sm font-bold text-[var(--charcoal)]">{email}</span>
+                      </div>
+                      <button onClick={() => removeInvite(email)} className="text-[var(--warm-gray)] hover:text-red-500 p-2 transition-colors">
+                        <Trash2 size={18} />
                       </button>
                     </div>
                   ))}
@@ -230,16 +249,18 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
                 <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Active Family Members</h4>
                 <div className="space-y-2">
                   {authorizedUsers.map(user => (
-                    <div key={user.uid} className="flex items-center justify-between bg-green-50 p-3 rounded-lg border border-green-100">
-                      <div className="flex items-center">
-                        <UserCheck size={18} className="text-green-600 mr-2" />
+                    <div key={user.uid} className="flex items-center justify-between bg-[var(--sage)]/5 p-4 rounded-2xl border border-[var(--sage)]/10 group/member">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-[var(--sage)] shadow-sm font-black">
+                           {user.name[0].toUpperCase()}
+                        </div>
                         <div>
-                          <p className="text-sm font-bold text-green-900">{user.name}</p>
-                          <p className="text-xs text-green-700">{user.email}</p>
+                          <p className="text-sm font-black text-[var(--charcoal)]">{user.name}</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] opacity-60">{user.email}</p>
                         </div>
                       </div>
-                      <button onClick={() => removeUser(user.uid)} className="text-red-500 hover:text-red-700">
-                        <Trash2 size={16} />
+                      <button onClick={() => removeUser(user.uid)} className="text-[var(--warm-gray)] hover:text-red-500 p-2 transition-colors">
+                        <Trash2 size={18} />
                       </button>
                     </div>
                   ))}
@@ -251,32 +272,32 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
 
         <div className="h-px bg-gray-100 mb-10"></div>
 
-        <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 mb-6">
-          <h3 className="text-sm font-bold text-indigo-800 mb-3">Add Member Profile (for Cook)</h3>
-          <div className="flex flex-col sm:flex-row gap-3">
+        <div className="bg-[var(--cream)]/30 p-8 rounded-[32px] border border-[var(--cream-dark)]/50 mb-6">
+          <h3 className="text-[10px] font-black text-[var(--warm-gray)] uppercase tracking-widest mb-6 opacity-60">Add Member Profile (for Cook)</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Name (e.g. Grandma)"
-              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-5 py-3 rounded-2xl bg-white border-2 border-transparent focus:border-[var(--sage)]/20 focus:outline-none transition-all font-bold text-[var(--charcoal)] shadow-sm"
             />
             <input
               type="text"
               value={newPreferences}
               onChange={(e) => setNewPreferences(e.target.value)}
               placeholder="Dietary Notes (e.g. No salt, pure veg)"
-              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-5 py-3 rounded-2xl bg-white border-2 border-transparent focus:border-[var(--sage)]/20 focus:outline-none transition-all font-bold text-[var(--charcoal)] shadow-sm"
               onKeyDown={(e) => e.key === 'Enter' && addMember()}
             />
-            <button
-              onClick={addMember}
-              disabled={!newName.trim() || saving}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center shrink-0"
-            >
-              <Plus size={18} className="mr-1" /> Add
-            </button>
           </div>
+          <button
+            onClick={addMember}
+            disabled={!newName.trim() || saving}
+            className="w-full py-4 bg-[var(--charcoal)] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-[var(--charcoal-soft)] disabled:opacity-50 flex items-center justify-center shadow-lg transition-all active:scale-95"
+          >
+            <Plus size={18} className="mr-2 text-[var(--terracotta)]" /> Add Profile
+          </button>
         </div>
 
         {members.length === 0 ? (
@@ -286,9 +307,9 @@ export default function ManageFamily({ householdId }: ManageFamilyProps) {
             {members.map((member) => (
               <li key={member.id} className="py-4 flex justify-between items-start">
                 <div>
-                  <p className="font-medium text-gray-800">{member.name}</p>
+                  <p className="font-bold text-[var(--charcoal)] text-lg">{member.name}</p>
                   {member.preferences && (
-                    <p className="text-sm text-gray-600 mt-1 bg-gray-100 inline-block px-2 py-1 rounded">
+                    <p className="text-xs font-bold text-[var(--terracotta)] mt-1.5 bg-[var(--terracotta)]/5 inline-block px-3 py-1 rounded-full border border-[var(--terracotta)]/10">
                       {member.preferences}
                     </p>
                   )}

@@ -1,9 +1,12 @@
 import { auth } from '../firebase';
 
 export interface LocalizedRecipe {
-  bengaliName: string;
+  bengaliName?: string;
   bengaliQuantity?: string;
   bengaliInstruction?: string;
+  hindiName?: string;
+  hindiQuantity?: string;
+  hindiInstruction?: string;
 }
 
 export interface AIMealItemDraft {
@@ -13,6 +16,13 @@ export interface AIMealItemDraft {
   quantityBn?: string;
   instruction: string;
   instructionBn?: string;
+  nutrition?: {
+    kcal: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  isFavorite?: boolean;
 }
 
 
@@ -22,7 +32,7 @@ export interface AIMealDraft {
   dinner: AIMealItemDraft[];
 }
 
-async function callAI<T>(payload: Record<string, unknown>, userProfile?: { name?: string, city?: string }): Promise<T> {
+async function callAI<T>(payload: Record<string, unknown>, userProfile?: { name?: string, city?: string, cookLanguage?: string }): Promise<T> {
   const token = await auth.currentUser?.getIdToken();
   
   // Fetch memory from Firestore
@@ -90,7 +100,7 @@ async function callAI<T>(payload: Record<string, unknown>, userProfile?: { name?
 export async function generateMealPlanDraft(
   prompt: string,
   startDate: string,
-  userProfile?: { name?: string, city?: string },
+  userProfile?: { name?: string, city?: string, cookLanguage?: string },
   existingDraft?: AIMealDraft[],
   pastMeals?: string,
   favorites?: string[]
@@ -107,7 +117,7 @@ export async function generateMealPlanDraft(
 
 export async function chatWithCulinaryAssistant(
   messages: { role: 'user' | 'assistant', content: string }[],
-  userProfile?: { name?: string, city?: string },
+  userProfile?: { name?: string, city?: string, cookLanguage?: string },
   pastMeals?: string,
   favorites?: string[]
 ): Promise<string> {
@@ -133,11 +143,24 @@ export async function batchTranslateRecipes(
     items,
   }, userProfile);
 
-  return items.map((item, i) => ({
-    bengaliName: (translations as any)?.[i]?.nameBn || item.name,
-    bengaliQuantity: (translations as any)?.[i]?.quantityBn || '',
-    bengaliInstruction: (translations as any)?.[i]?.instructionBn || '',
-  }));
+  const isHindi = userProfile?.cookLanguage === 'Hindi';
+
+  return items.map((item, i) => {
+    const t = (translations as any)?.[i];
+    if (isHindi) {
+      return {
+        hindiName: t?.nameBn || item.name,
+        hindiQuantity: t?.quantityBn || '',
+        hindiInstruction: t?.instructionBn || '',
+      };
+    } else {
+      return {
+        bengaliName: t?.nameBn || item.name,
+        bengaliQuantity: t?.quantityBn || '',
+        bengaliInstruction: t?.instructionBn || '',
+      };
+    }
+  });
 }
 
 export async function getBengaliRecipe(
@@ -149,7 +172,33 @@ export async function getBengaliRecipe(
     englishName,
   }, userProfile);
 
-  return {
-    bengaliName: translated?.trim() || englishName,
-  };
+  const isHindi = userProfile?.cookLanguage === 'Hindi';
+
+  if (isHindi) {
+    return {
+      hindiName: translated?.trim() || englishName,
+    };
+  } else {
+    return {
+      bengaliName: translated?.trim() || englishName,
+    };
+  }
+}
+
+export async function generateGroceryList(
+  meals: { name: string; quantity?: string; instruction?: string }[]
+): Promise<string[]> {
+  return callAI<string[]>({
+    action: 'generate-grocery',
+    meals,
+  });
+}
+
+export async function getBatchNutrition(
+  items: { id: string, name: string, quantity?: string }[]
+): Promise<any[]> {
+  return callAI<any[]>({
+    action: 'batch-nutrition',
+    items,
+  });
 }

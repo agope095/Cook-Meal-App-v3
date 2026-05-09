@@ -6,3 +6,13 @@ coverage/
 *.log
 .env*
 !.env.example
+.dev.vars
+docs/designpowers/
+.agent/rules
+.agents/
+.claude/
+.wrangler/
+.gemini/
+graphify-out/
+mkdir/
+crm/

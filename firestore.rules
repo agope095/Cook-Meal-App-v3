@@ -7,6 +7,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Is the user verified (email or phone)?
+    function isVerified() {
+      return signedIn() && (
+        request.auth.token.email_verified == true ||
+        request.auth.token.phone_number != null
+      );
+    }
+
     // Is the user the owner of the specific document? (For owners/cooks collection)
     function isSelf(userId) {
       return signedIn() && request.auth.uid == userId;
@@ -14,24 +22,36 @@ service cloud.firestore {
 
     // Is the user an admin
     function isAdmin() {
-      return signedIn() && 
-        (request.auth.token.email == "gopeabhijit85@gmail.com" || 
+      return signedIn() &&
+        (request.auth.token.email == "gopeabhijit85@gmail.com" ||
          exists(/databases/$(database)/documents/admins/$(request.auth.token.email)));
     }
 
     // Is the user a cook for a specific owner?
     function isCookOf(ownerId) {
-      return signedIn() && 
+      return signedIn() &&
         exists(/databases/$(database)/documents/cooks/$(request.auth.uid)) &&
         (ownerId in get(/databases/$(database)/documents/cooks/$(request.auth.uid)).data.ownerIds);
     }
-    
+
     // Is the user part of the household (owner or joined family member)
     function isPartOfHousehold(ownerId) {
-       return signedIn() && 
-         (request.auth.uid == ownerId || 
-          (exists(/databases/$(database)/documents/owners/$(request.auth.uid)) && 
+       return signedIn() &&
+         (request.auth.uid == ownerId ||
+          (exists(/databases/$(database)/documents/owners/$(ownerId)) &&
+           request.auth.uid in get(/databases/$(database)/documents/owners/$(ownerId)).data.authorizedUids) ||
+          (exists(/databases/$(database)/documents/owners/$(request.auth.uid)) &&
            get(/databases/$(database)/documents/owners/$(request.auth.uid)).data.joinedHouseholdId == ownerId));
+    }
+
+    // Helper: Is the user unlinking themselves as an owner from a cook?
+    function isOwnerUnlinking(cookId) {
+      return signedIn() &&
+        resource != null &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerIds', 'updatedAt']) &&
+        request.resource.data.ownerIds.size() == resource.data.ownerIds.size() - 1 &&
+        !(request.auth.uid in request.resource.data.ownerIds) &&
+        (request.auth.uid in resource.data.ownerIds);
     }
 
     // Owner Profiles
@@ -41,19 +61,24 @@ service cloud.firestore {
         isCookOf(userId) || 
         isPartOfHousehold(userId)
       );
-      allow write: if isSelf(userId);
+      // Allow self-write only if verified, or if NOT trying to set the verified flag
+      allow write: if isSelf(userId) && (
+        isVerified() || 
+        (resource == null && !request.resource.data.keys().hasAny(['verified', 'verifiedAt', 'verifiedMethod'])) ||
+        (resource != null && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verified', 'verifiedAt', 'verifiedMethod']))
+      );
     }
 
     // Meal Plans
     match /mealPlans/{planId} {
       allow read: if signedIn() && (
-        isAdmin() || 
-        isPartOfHousehold(resource.data.ownerId) || 
+        isAdmin() ||
+        isPartOfHousehold(resource.data.ownerId) ||
         isCookOf(resource.data.ownerId)
       );
-      
-      allow write: if signedIn() && (
-        isAdmin() || 
+
+      allow write: if signedIn() && isVerified() && (
+        isAdmin() ||
         isPartOfHousehold(request.resource.data.ownerId) ||
         (resource != null && isCookOf(resource.data.ownerId))
       );
@@ -62,46 +87,76 @@ service cloud.firestore {
     // Global Curated Recipes
     match /recipes/{id} {
       allow read: if signedIn();
-      allow write: if isAdmin();
+      allow write: if isAdmin() && isVerified();
     }
-    
+
+    // Community Crowdsourced Recipes (Shared Cache)
+    match /communityRecipes/{id} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isVerified();
+    }
+
     // User Proposed Recipes (fallback dictionary)
     match /recipeProposals/{id} {
-      allow read: if signedIn() && (isAdmin() || id.startsWith(request.auth.uid) || isCookOf(resource.data.ownerId));
-      allow write: if signedIn() && id.startsWith(request.auth.uid);
+      allow read: if signedIn() && (
+        isAdmin() || 
+        isPartOfHousehold(resource.data.ownerId) || 
+        isCookOf(resource.data.ownerId)
+      );
+      allow write: if signedIn() && isVerified() && (
+        isAdmin() ||
+        isPartOfHousehold(request.resource.data.ownerId)
+      );
     }
 
     match /favorites/{id} {
-      allow read: if signedIn() && (isAdmin() || id.startsWith(request.auth.uid) || isCookOf(resource.data.ownerId));
-      allow write: if signedIn() && (isAdmin() || id.startsWith(request.auth.uid));
+      allow read: if signedIn() && (
+        isAdmin() || 
+        isPartOfHousehold(resource.data.ownerId) || 
+        isCookOf(resource.data.ownerId)
+      );
+      allow write: if signedIn() && isVerified() && (
+        isAdmin() ||
+        isPartOfHousehold(request.resource.data.ownerId)
+      );
     }
 
     match /inviteCodes/{code} {
-      // v4: Only authenticated users can read invite codes
-      allow read: if signedIn(); 
-      allow write: if signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid));
-      // Only the owner who created the code can delete it
-      allow delete: if signedIn() && (
+      allow read: if signedIn() && (
+        isAdmin() || 
+        resource == null || // Allow checking if code exists
+        resource.data.ownerId == request.auth.uid
+      );
+      allow write: if signedIn() && isVerified() && exists(/databases/$(database)/documents/owners/$(request.auth.uid));
+      // Only the owner who created the code can delete it OR a verified cook can consume it (if they are NOT already linked to this owner)
+      allow delete: if signedIn() && isVerified() && (
         resource.data.ownerId == request.auth.uid ||
-        (exists(/databases/$(database)/documents/owners/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/owners/$(request.auth.uid)).data.joinedHouseholdId == resource.data.ownerId)
+        (exists(/databases/$(database)/documents/cooks/$(request.auth.uid)) && 
+         !(resource.data.ownerId in get(/databases/$(database)/documents/cooks/$(request.auth.uid)).data.ownerIds))
       );
     }
 
     match /cooks/{cookId} {
-      allow read: if isSelf(cookId) || (signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid)) && 
+      allow read: if isSelf(cookId) || (signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid)) &&
         request.auth.uid in get(/databases/$(database)/documents/cooks/$(cookId)).data.ownerIds);
-      allow write: if isSelf(cookId);
+      
+      // Allow self-write OR owner-unlinking
+      allow write: if (isSelf(cookId) && (
+        isVerified() || 
+        (resource == null && !request.resource.data.keys().hasAny(['verified', 'verifiedAt', 'verifiedMethod'])) ||
+        (resource != null && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verified', 'verifiedAt', 'verifiedMethod']))
+      )) || isOwnerUnlinking(cookId);
     }
 
     match /localities/{id} {
       allow read: if signedIn();
-      allow write: if isAdmin();
+      allow write: if isAdmin() && isVerified();
     }
 
     match /admins/{email} {
-      allow read: if true; 
+      allow read: if isAdmin();
       allow write: if false;
     }
+
   }
 }

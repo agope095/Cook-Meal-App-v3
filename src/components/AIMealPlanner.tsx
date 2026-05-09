@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Sparkles, Send, Check, Loader2, Trash2, Edit2, Heart } from 'lucide-react';
-import { generateMealPlanDraft, AIMealDraft } from '../services/geminiService';
+import { generateMealPlanDraft, AIMealDraft, AIMealItemDraft } from '../services/geminiService';
 import { getPastMeals, getFavorites, addFavorite } from '../services/historyService';
 import { auth } from '../firebase';
+import { motion, AnimatePresence } from 'framer-motion';
 import { MealItem } from '../types';
 
 interface AIMealPlannerProps {
@@ -103,7 +104,7 @@ export default function AIMealPlanner({ onApprove, startDate, householdId }: AIM
   };
 
 
-  const updateItem = (dateIndex: number, mealType: 'lunch' | 'dinner', itemIndex: number, field: keyof AIMealItem, value: string) => {
+  const updateItem = (dateIndex: number, mealType: 'lunch' | 'dinner', itemIndex: number, field: keyof AIMealItemDraft, value: string) => {
     const newDrafts = [...(drafts || [])];
     if (!newDrafts[dateIndex]) return;
     (newDrafts[dateIndex][mealType][itemIndex] as any)[field] = value;
@@ -136,51 +137,59 @@ export default function AIMealPlanner({ onApprove, startDate, householdId }: AIM
   };
 
   if (!drafts || drafts.length === 0) {
-
     return (
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 text-indigo-600 mb-4">
+      <div className="bg-white/40 backdrop-blur-xl border-2 border-white rounded-[40px] p-8 md:p-12 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-100/50 rounded-full blur-[100px] -mr-32 -mt-32" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-100/30 rounded-full blur-[100px] -ml-32 -mb-32" />
+
+        <div className="relative text-center mb-12">
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gray-900 text-white mb-6 shadow-2xl"
+          >
             <Sparkles size={32} />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800">AI Meal Planner</h2>
-          <p className="text-gray-600 mt-2">Describe what you want to eat, and let AI plan it for you.</p>
+          </motion.div>
+          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter mb-4">AI Meal Planner</h2>
+          <p className="text-gray-500 font-medium max-w-md mx-auto">
+            Describe your cravings, dietary needs, or what's in your fridge. Let our AI curate your perfect week.
+          </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm">
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 bg-red-50 text-red-700 border border-red-100 rounded-2xl text-xs font-bold uppercase tracking-widest text-center">
             {error}
-          </div>
-        )}
-        
-        {success && (
-          <div className="mb-4 p-3 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm">
-            {success}
-          </div>
+          </motion.div>
         )}
 
-        <div className="max-w-2xl mx-auto">
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="e.g., Plan meal plan for next 2 days veg. Add tea in lunch mandatorily. Use the spinach in my fridge."
-            className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px] resize-y"
-          />
+        <div className="max-w-2xl mx-auto space-y-6">
+          <div className="relative group">
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleGenerate();
+                }
+              }}
+              placeholder="e.g., Plan 3 days of healthy veg meals. Include my favorite Dal Tadka once."
+              className="w-full p-6 bg-white/60 border-2 border-white rounded-[32px] focus:ring-4 focus:ring-gray-900/5 focus:border-gray-900 min-h-[160px] resize-none transition-all shadow-inner outline-none text-gray-900 font-medium"
+            />
+            <div className="absolute bottom-4 right-4 flex gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-300 group-focus-within:text-gray-400">Describe & Generate</span>
+            </div>
+          </div>
+
           <button
             onClick={handleGenerate}
             disabled={isGenerating || !prompt.trim()}
-            className="mt-4 w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-lg"
+            className="w-full flex items-center justify-center py-5 px-8 rounded-[32px] bg-gray-900 text-white shadow-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100"
           >
             {isGenerating ? (
-              <>
-                <Loader2 className="animate-spin mr-2" size={20} />
-                Generating Plan...
-              </>
+              <Loader2 className="animate-spin" size={24} />
             ) : (
-              <>
-                <Sparkles className="mr-2" size={20} />
-                Generate Meal Plan
-              </>
+              <span className="text-xs font-black uppercase tracking-[0.2em]">Craft My Meal Plan</span>
             )}
           </button>
         </div>
@@ -189,217 +198,141 @@ export default function AIMealPlanner({ onApprove, startDate, householdId }: AIM
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="flex items-center justify-between mb-6">
+    <div className="space-y-10 pb-20">
+      <div className="bg-white/40 backdrop-blur-xl border-2 border-white rounded-[40px] p-6 md:p-10 shadow-2xl">
+        <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-              <Sparkles className="text-indigo-600 mr-2" size={24} />
-              Review Draft Plan
-            </h2>
-            <p className="text-gray-600 mt-1">Add quantities, tweak instructions, or ask AI to change it.</p>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 bg-gray-900 text-white rounded-xl flex items-center justify-center">
+                <Sparkles size={16} />
+              </div>
+              <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">Draft Plan</h2>
+            </div>
+            <p className="text-gray-500 text-sm font-medium">Review and refine your curated selection.</p>
           </div>
+          
           <button
             onClick={handleApprove}
             disabled={isApproving}
-            className="flex items-center py-2 px-6 border border-transparent rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+            className="w-full md:w-auto flex items-center justify-center py-4 px-10 rounded-[24px] bg-gray-900 text-white shadow-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
           >
             {isApproving ? (
-              <>
-                <Loader2 className="animate-spin mr-2" size={20} />
-                Processing & Saving...
-              </>
+              <Loader2 className="animate-spin" size={20} />
             ) : (
-              <>
-                <Check className="mr-2" size={20} />
-                Approve & Save to Calendar
-              </>
+              <span className="text-xs font-black uppercase tracking-widest">Approve & Save</span>
             )}
           </button>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
-        
-        {success && (
-          <div className="mb-4 p-3 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm">
-            {success}
-          </div>
-        )}
-
-        <div className="space-y-8">
+        <div className="grid grid-cols-1 gap-8">
           {drafts.map((day, dayIndex) => (
-            <div key={day.date} className="border border-gray-200 rounded-xl overflow-hidden">
-              <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                <h3 className="text-lg font-bold text-gray-800">
-                  {format(parseISO(day.date), 'EEEE, MMMM d, yyyy')}
+            <motion.div 
+              key={day.date}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: dayIndex * 0.1 }}
+              className="bg-white/60 border border-white rounded-[32px] overflow-hidden shadow-sm"
+            >
+              <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">
+                  {format(parseISO(day.date), 'EEEE, MMM dd')}
                 </h3>
+                <div className="flex gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500" title="Veg Available" />
+                </div>
               </div>
               
-              <div className="p-4 space-y-6">
-                {/* Lunch */}
-                <div>
-                  <h4 className="font-semibold text-gray-700 mb-3 flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-orange-400 mr-2"></span>
-                    Lunch
-                  </h4>
-                  {day.lunch.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic">No items planned.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {day.lunch.map((item, itemIndex) => (
-                        <div key={itemIndex} className="bg-white border border-gray-100 p-4 rounded-lg shadow-sm space-y-3">
-                          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                            <div className="font-medium text-gray-800 min-w-[150px] flex items-center justify-between">
-                              <div className="flex flex-col">
-                                <span className="font-bold">{item.name}</span>
-                                {item.nameBn && <span className="text-sm text-indigo-600 font-local-script">{item.nameBn}</span>}
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                {(['lunch', 'dinner'] as const).map((mealType) => (
+                  <div key={mealType} className="space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${mealType === 'lunch' ? 'bg-orange-400' : 'bg-indigo-400'}`} />
+                      {mealType}
+                    </h4>
+                    {day[mealType].length === 0 ? (
+                      <div className="p-4 rounded-2xl border border-dashed border-gray-200 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Empty</div>
+                    ) : (
+                      <div className="space-y-4">
+                        {day[mealType].map((item, itemIndex) => (
+                          <div key={itemIndex} className="bg-white p-5 rounded-2xl border border-gray-50 shadow-sm space-y-4 hover:shadow-md transition-all group">
+                            <div className="flex flex-col gap-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex flex-col">
+                                  <span className="font-black text-gray-900 tracking-tight">{item.name}</span>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {item.nameBn && <span className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">{item.nameBn}</span>}
+                                    {item.nutrition && (
+                                      <span className="text-[9px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-bold">
+                                        {item.nutrition.kcal} kcal
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <button onClick={() => handleAddFavorite(item.name)} className="p-2 text-gray-200 hover:text-red-500 transition-colors">
+                                  <Heart size={16} fill={item.isFavorite ? 'currentColor' : 'none'} />
+                                </button>
                               </div>
-                              <button onClick={() => handleAddFavorite(item.name)} className="text-gray-400 hover:text-red-500 transition-colors ml-2" title="Add to Favorites">
-                                <Heart size={16} />
-                              </button>
-                            </div>
-                            <div className="flex-1 space-y-2">
-                              <input
-                                type="text"
-                                placeholder="Quantity (e.g., 2 cups)"
-                                value={item.quantity}
-                                onChange={(e) => updateItem(dayIndex, 'lunch', itemIndex, 'quantity', e.target.value)}
-                                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
-                              />
-                              {item.quantityBn && (
-                                <input
-                                  type="text"
-                                  value={item.quantityBn}
-                                  onChange={(e) => updateItem(dayIndex, 'lunch', itemIndex, 'quantityBn', e.target.value)}
-                                  className="w-full px-3 py-1 text-xs border border-indigo-100 rounded bg-indigo-50/30 text-indigo-700 font-medium"
-                                  placeholder={`${userProfile.cookLanguage || 'Bengali'} quantity`}
-                                />
-                              )}
-                            </div>
-                            <div className="flex-1 space-y-2">
-                              <input
-                                type="text"
-                                placeholder="Special Instructions"
-                                value={item.instruction}
-                                onChange={(e) => updateItem(dayIndex, 'lunch', itemIndex, 'instruction', e.target.value)}
-                                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
-                              />
-                              {item.instructionBn && (
-                                <input
-                                  type="text"
-                                  value={item.instructionBn}
-                                  onChange={(e) => updateItem(dayIndex, 'lunch', itemIndex, 'instructionBn', e.target.value)}
-                                  className="w-full px-3 py-1 text-xs border border-indigo-100 rounded bg-indigo-50/30 text-indigo-700 font-medium"
-                                  placeholder={`${userProfile.cookLanguage || 'Bengali'} instruction`}
-                                />
-                              )}
-
+                              
+                              <div className="grid grid-cols-1 gap-2">
+                                <div className="flex flex-col gap-1">
+                                  <input
+                                    type="text"
+                                    placeholder="Quantity"
+                                    value={item.quantity}
+                                    onChange={(e) => updateItem(dayIndex, mealType, itemIndex, 'quantity', e.target.value)}
+                                    className="w-full px-3 py-2 text-[11px] font-bold border-none bg-gray-50 rounded-xl focus:ring-2 focus:ring-gray-900 transition-all outline-none"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <input
+                                    type="text"
+                                    placeholder="Special Instructions"
+                                    value={item.instruction}
+                                    onChange={(e) => updateItem(dayIndex, mealType, itemIndex, 'instruction', e.target.value)}
+                                    className="w-full px-3 py-2 text-[11px] font-bold border-none bg-gray-50 rounded-xl focus:ring-2 focus:ring-gray-900 transition-all outline-none"
+                                  />
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Dinner */}
-                <div>
-                  <h4 className="font-semibold text-gray-700 mb-3 flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-indigo-400 mr-2"></span>
-                    Dinner
-                  </h4>
-                  {day.dinner.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic">No items planned.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {day.dinner.map((item, itemIndex) => (
-                        <div key={itemIndex} className="bg-white border border-gray-100 p-4 rounded-lg shadow-sm space-y-3">
-                          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                            <div className="font-medium text-gray-800 min-w-[150px] flex items-center justify-between">
-                              <div className="flex flex-col">
-                                <span className="font-bold">{item.name}</span>
-                                {item.nameBn && <span className="text-sm text-indigo-600 font-local-script">{item.nameBn}</span>}
-                              </div>
-                              <button onClick={() => handleAddFavorite(item.name)} className="text-gray-400 hover:text-red-500 transition-colors ml-2" title="Add to Favorites">
-                                <Heart size={16} />
-                              </button>
-                            </div>
-                            <div className="flex-1 space-y-2">
-                              <input
-                                type="text"
-                                placeholder="Quantity (e.g., 2 cups)"
-                                value={item.quantity}
-                                onChange={(e) => updateItem(dayIndex, 'dinner', itemIndex, 'quantity', e.target.value)}
-                                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
-                              />
-                              {item.quantityBn && (
-                                <input
-                                  type="text"
-                                  value={item.quantityBn}
-                                  onChange={(e) => updateItem(dayIndex, 'dinner', itemIndex, 'quantityBn', e.target.value)}
-                                  className="w-full px-3 py-1 text-xs border border-indigo-100 rounded bg-indigo-50/30 text-indigo-700 font-medium"
-                                  placeholder={`${userProfile.cookLanguage || 'Bengali'} quantity`}
-                                />
-                              )}
-                            </div>
-                            <div className="flex-1 space-y-2">
-                              <input
-                                type="text"
-                                placeholder="Special Instructions"
-                                value={item.instruction}
-                                onChange={(e) => updateItem(dayIndex, 'dinner', itemIndex, 'instruction', e.target.value)}
-                                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
-                              />
-                              {item.instructionBn && (
-                                <input
-                                  type="text"
-                                  value={item.instructionBn}
-                                  onChange={(e) => updateItem(dayIndex, 'dinner', itemIndex, 'instructionBn', e.target.value)}
-                                  className="w-full px-3 py-1 text-xs border border-indigo-100 rounded bg-indigo-50/30 text-indigo-700 font-medium"
-                                  placeholder={`${userProfile.cookLanguage || 'Bengali'} instruction`}
-                                />
-                              )}
-
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
 
-      {/* Tweak Box */}
-      <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100">
-        <h3 className="text-lg font-semibold text-indigo-900 mb-2 flex items-center">
-          <Edit2 size={18} className="mr-2" />
-          Tweak this plan
-        </h3>
-        <p className="text-sm text-indigo-700 mb-4">Don't like something? Ask AI to change it.</p>
-        <div className="flex gap-3">
-          <input
-            type="text"
-            value={tweakPrompt}
-            onChange={(e) => setTweakPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleTweak()}
-            placeholder="e.g., Swap tomorrow's dinner for something lighter like Khichdi"
-            className="flex-1 px-4 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
-          <button
-            onClick={handleTweak}
-            disabled={isGenerating || !tweakPrompt.trim()}
-            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-          >
-            {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
-          </button>
+      {/* Premium Tweak Box */}
+      <div className="bg-gray-900 rounded-[40px] p-8 md:p-10 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl" />
+        <div className="relative">
+          <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-2 flex items-center gap-3">
+            <Edit2 size={20} className="text-indigo-400" />
+            Tweak the Curation
+          </h3>
+          <p className="text-gray-400 text-sm font-medium mb-6">Want something lighter? More spicy? Just ask.</p>
+          
+          <div className="flex flex-col md:flex-row gap-4">
+            <input
+              type="text"
+              value={tweakPrompt}
+              onChange={(e) => setTweakPrompt(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleTweak()}
+              placeholder="e.g., Make Tuesday's dinner lighter, maybe some soup."
+              className="flex-1 px-6 py-4 bg-white/10 border border-white/10 rounded-[24px] text-white font-medium focus:ring-2 focus:ring-white/20 transition-all outline-none placeholder:text-gray-500"
+            />
+            <button
+              onClick={handleTweak}
+              disabled={isGenerating || !tweakPrompt.trim()}
+              className="flex items-center justify-center py-4 px-8 bg-white text-gray-900 rounded-[24px] font-black uppercase tracking-widest text-[10px] hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {isGenerating ? <Loader2 className="animate-spin" size={18} /> : 'Update Plan'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
