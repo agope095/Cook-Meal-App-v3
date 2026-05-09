@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db, logout, loginWithGoogle } from './firebase';
-import { onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { doc, getDoc, setDoc, arrayUnion, updateDoc, deleteDoc, arrayRemove, onSnapshot, query, collection, where, documentId, getDocs } from 'firebase/firestore';
 import { useSearchParams, Link } from 'react-router-dom';
 import CookView from './components/CookView';
 import VerificationGate from './components/VerificationGate';
-import { Home, PlusCircle, LogOut, ChevronRight, MapPin, Building2, User as UserIcon, Mail, Lock, Sparkles, ChefHat } from 'lucide-react';
+import { Home, PlusCircle, LogOut, ChevronRight, MapPin, Building2, User as UserIcon, Mail, Lock, Sparkles, ChefHat, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface HouseholdMapping {
@@ -37,7 +37,10 @@ export default function CookApp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'phone'>('login');
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
@@ -215,7 +218,7 @@ export default function CookApp() {
     try {
       if (authMode === 'login') {
         await signInWithEmailAndPassword(auth, email, password);
-      } else {
+      } else if (authMode === 'register') {
         if (!name.trim()) throw new Error("Please enter your name");
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await setDoc(doc(db, 'cooks', userCredential.user.uid), {
@@ -227,6 +230,65 @@ export default function CookApp() {
       }
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const setupRecaptcha = () => {
+    if ((window as any).recaptchaVerifier) return;
+    try {
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible',
+      });
+    } catch (err) {
+      console.error("Recaptcha setup failed", err);
+    }
+  };
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneNumber) return;
+    setAuthLoading(true);
+    setError('');
+    try {
+      setupRecaptcha();
+      const appVerifier = (window as any).recaptchaVerifier;
+      const result = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+      setConfirmationResult(result);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP.');
+      if ((window as any).recaptchaVerifier) {
+        (window as any).recaptchaVerifier.clear();
+        (window as any).recaptchaVerifier = null;
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp || !confirmationResult) return;
+    setAuthLoading(true);
+    setError('');
+    try {
+      const result = await confirmationResult.confirm(otp);
+      // New user via phone auth doesn't have a profile yet
+      const cookRef = doc(db, 'cooks', result.user.uid);
+      const cookSnap = await getDoc(cookRef);
+      if (!cookSnap.exists()) {
+        await setDoc(cookRef, {
+          name: 'New Cook',
+          email: result.user.email || '',
+          phone: result.user.phoneNumber,
+          ownerIds: [],
+          createdAt: new Date().toISOString(),
+          verified: true // Phone auth inherently verifies the number
+        });
+      }
+    } catch (err: any) {
+      setError(err.message || 'Invalid OTP. Please try again.');
     } finally {
       setAuthLoading(false);
     }
@@ -327,77 +389,150 @@ export default function CookApp() {
             <p className="text-[var(--charcoal-soft)] font-medium opacity-60">Join a kitchen to start your shift</p>
           </div>
 
-          <form onSubmit={handleAuth} className="space-y-6 relative z-10">
-            <AnimatePresence mode="wait">
-              {authMode === 'register' && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                >
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Full Name</label>
+          <div id="recaptcha-container"></div>
+          
+          {authMode === 'phone' ? (
+            <div className="space-y-6 relative z-10">
+              {!confirmationResult ? (
+                <form onSubmit={handleSendOtp} className="space-y-4">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Phone Number</label>
                   <div className="relative group">
-                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
                     <input
-                      type="text"
+                      type="tel"
                       required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
                       className="w-full pl-12 pr-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400 shadow-inner"
-                      placeholder="Enter your name"
+                      placeholder="+91 98765 43210"
                     />
                   </div>
-                </motion.div>
+                  {error && <p className="text-[var(--terracotta)] text-xs font-bold px-1">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full bg-[var(--terracotta)] text-white py-5 rounded-2xl font-black text-lg hover:bg-[var(--terracotta-deep)] transition-all shadow-lg disabled:opacity-50 flex items-center justify-center gap-3"
+                  >
+                    {authLoading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="h-5 w-5 border-2 border-white border-t-transparent rounded-full" /> : 'Send OTP'}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Enter OTP</label>
+                  <input
+                    type="text"
+                    required
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    className="w-full px-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-black text-2xl text-center tracking-[0.5em] shadow-inner"
+                    placeholder="000000"
+                    maxLength={6}
+                  />
+                  {error && <p className="text-[var(--terracotta)] text-xs font-bold px-1">{error}</p>}
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full bg-[var(--terracotta)] text-white py-5 rounded-2xl font-black text-lg hover:bg-[var(--terracotta-deep)] transition-all shadow-lg disabled:opacity-50 flex items-center justify-center gap-3"
+                  >
+                    {authLoading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="h-5 w-5 border-2 border-white border-t-transparent rounded-full" /> : 'Verify & Sign In'}
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setConfirmationResult(null)} 
+                    className="w-full text-center text-xs text-[var(--warm-gray)] font-bold mt-2"
+                  >
+                    Change Number
+                  </button>
+                </form>
               )}
-            </AnimatePresence>
-
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Email</label>
-              <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400 shadow-inner"
-                  placeholder="cook@example.com"
-                />
-              </div>
             </div>
+          ) : (
+            <form onSubmit={handleAuth} className="space-y-6 relative z-10">
+              <AnimatePresence mode="wait">
+                {authMode === 'register' && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Full Name</label>
+                    <div className="relative group">
+                      <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full pl-12 pr-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400 shadow-inner"
+                        placeholder="Enter your name"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Password</label>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400 shadow-inner"
-                  placeholder="••••••••"
-                />
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Email</label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400 shadow-inner"
+                    placeholder="cook@example.com"
+                  />
+                </div>
               </div>
-            </div>
 
-            {error && <p className="text-[var(--terracotta)] text-xs font-bold px-1">{error}</p>}
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Password</label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400 shadow-inner"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
 
+              {error && <p className="text-[var(--terracotta)] text-xs font-bold px-1">{error}</p>}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-[var(--terracotta)] text-white py-5 rounded-2xl font-black text-lg hover:bg-[var(--terracotta-deep)] transition-all shadow-[0_12px_24px_rgba(184,80,59,0.2)] hover:shadow-[0_16px_32px_rgba(184,80,59,0.3)] disabled:opacity-50 flex items-center justify-center gap-3"
+              >
+                {authLoading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="h-5 w-5 border-2 border-white border-t-transparent rounded-full" /> : (authMode === 'login' ? 'Sign In' : 'Create Account')}
+              </button>
+            </form>
+          )}
+
+          <div className="mt-8 text-center space-y-3">
             <button
-              type="submit"
-              disabled={authLoading}
-              className="w-full bg-[var(--terracotta)] text-white py-5 rounded-2xl font-black text-lg hover:bg-[var(--terracotta-deep)] transition-all shadow-[0_12px_24px_rgba(184,80,59,0.2)] hover:shadow-[0_16px_32px_rgba(184,80,59,0.3)] disabled:opacity-50 flex items-center justify-center gap-3"
+              onClick={() => {
+                setAuthMode(authMode === 'phone' ? 'login' : 'phone');
+                setConfirmationResult(null);
+                setError('');
+              }}
+              className="text-[var(--terracotta)] text-sm font-bold hover:underline opacity-80 hover:opacity-100 flex items-center justify-center gap-2 mx-auto"
             >
-              {authLoading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="h-5 w-5 border-2 border-white border-t-transparent rounded-full" /> : (authMode === 'login' ? 'Sign In' : 'Create Account')}
+              <Phone size={14} />
+              {authMode === 'phone' ? "Use Email/Password instead" : "Sign In with Phone (OTP)"}
             </button>
-          </form>
-
-          <div className="mt-8 text-center">
             <button
-              onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
-              className="text-[var(--terracotta)] text-sm font-bold hover:underline opacity-80 hover:opacity-100"
+              onClick={() => {
+                setAuthMode(authMode === 'login' ? 'register' : 'login');
+                setError('');
+              }}
+              className="text-[var(--warm-gray)] text-[10px] font-black uppercase tracking-widest hover:underline opacity-60 hover:opacity-100 block mx-auto"
             >
-              {authMode === 'login' ? "New here? Create an account" : "Already have an account? Sign In"}
+              {authMode === 'login' ? "New here? Create Account" : "Back to Sign In"}
             </button>
           </div>
 
