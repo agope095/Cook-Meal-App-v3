@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db, logout, loginWithGoogle } from './firebase';
 import { onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc, arrayUnion, updateDoc, deleteDoc } from 'firebase/firestore';
-import { useSearchParams } from 'react-router-dom';
+import { doc, getDoc, setDoc, arrayUnion, updateDoc, deleteDoc, arrayRemove, onSnapshot, query, collection, where, documentId, getDocs } from 'firebase/firestore';
+import { useSearchParams, Link } from 'react-router-dom';
 import CookView from './components/CookView';
-import { Home, PlusCircle, LogOut, ChevronRight, MapPin, Building2, User as UserIcon, Mail, Lock } from 'lucide-react';
+import VerificationGate from './components/VerificationGate';
+import { Home, PlusCircle, LogOut, ChevronRight, MapPin, Building2, User as UserIcon, Mail, Lock, Sparkles, ChefHat } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface HouseholdMapping {
   ownerId: string;
@@ -28,6 +30,8 @@ export default function CookApp() {
   const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(!!searchParams.get('invite'));
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [isExistingCook, setIsExistingCook] = useState(false);
 
   // Auth form states
   const [email, setEmail] = useState('');
@@ -36,33 +40,45 @@ export default function CookApp() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        try {
-          const cookDoc = await getDoc(doc(db, 'cooks', currentUser.uid));
+        
+        unsubscribeProfile = onSnapshot(doc(db, 'cooks', currentUser.uid), async (cookDoc) => {
           if (cookDoc.exists()) {
             const data = cookDoc.data();
             setUserProfile(data);
-            
+
+            if (!currentUser.emailVerified && !currentUser.phoneNumber && !data?.verified) {
+              setNeedsVerification(true);
+              setIsExistingCook(true);
+            } else {
+              setNeedsVerification(false);
+            }
+
             if (data.ownerIds && data.ownerIds.length > 0) {
               const houses: HouseholdMapping[] = [];
-              for (const oid of data.ownerIds) {
-                const ownerSnap = await getDoc(doc(db, 'owners', oid));
-                if (ownerSnap.exists()) {
-                  const oData = ownerSnap.data();
-                  houses.push({
-                    ownerId: oid,
-                    society: oData.society || 'Unknown Society',
-                    tower: oData.tower || '',
-                    flat: oData.flat || ''
-                  });
-                }
-              }
+              const ownersQuery = query(
+                collection(db, 'owners'),
+                where(documentId(), 'in', data.ownerIds)
+              );
+              const ownersSnap = await getDocs(ownersQuery);
+              ownersSnap.forEach(ownerDoc => {
+                const oData = ownerDoc.data();
+                houses.push({
+                  ownerId: ownerDoc.id,
+                  society: oData.society || 'Unknown Society',
+                  tower: oData.tower || '',
+                  flat: oData.flat || ''
+                });
+              });
               setHouseholds(houses);
+            } else {
+              setHouseholds([]);
             }
           } else {
-            // New cook or uninitialized profile - create it
             const newProfile = {
               name: currentUser.displayName || 'New Cook',
               email: currentUser.email,
@@ -70,30 +86,39 @@ export default function CookApp() {
               createdAt: new Date().toISOString()
             };
             await setDoc(doc(db, 'cooks', currentUser.uid), newProfile);
-            setUserProfile(newProfile);
-            setHouseholds([]);
+            
+            if (!currentUser.emailVerified && !currentUser.phoneNumber) {
+              setNeedsVerification(true);
+              setIsExistingCook(false);
+            }
           }
-        } catch (err) {
-          console.error("Error fetching cook profile:", err);
-        }
+          setLoading(false);
+        });
       } else {
+        if (unsubscribeProfile) {
+          unsubscribeProfile();
+          unsubscribeProfile = null;
+        }
         setUser(null);
         setUserProfile(null);
         setHouseholds([]);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
-  // Standalone effect for Deep Link connection to handle existing sessions
   useEffect(() => {
     const urlInvite = searchParams.get('invite');
-    if (user && urlInvite && !loading) {
+    const isVerified = user?.emailVerified || user?.phoneNumber || userProfile?.verified;
+    if (user && urlInvite && !loading && isVerified) {
       handleDeepLinkConnect(user, urlInvite);
     }
-  }, [user, searchParams, loading]);
+  }, [user, searchParams, loading, userProfile]);
 
   const handleDeepLinkConnect = async (currentUser: User, code: string) => {
     try {
@@ -109,8 +134,6 @@ export default function CookApp() {
       }
 
       const { ownerId } = inviteSnap.data();
-      
-      // 1. Ensure cook profile exists with at least a placeholder
       const cookRef = doc(db, 'cooks', currentUser.uid);
       const cookSnap = await getDoc(cookRef);
       if (!cookSnap.exists()) {
@@ -127,10 +150,8 @@ export default function CookApp() {
         });
       }
 
-      // 2. Consume code
       await deleteDoc(inviteRef);
 
-      // 3. Update local state
       const ownerSnap = await getDoc(doc(db, 'owners', ownerId));
       if (ownerSnap.exists()) {
         const data = ownerSnap.data();
@@ -154,6 +175,31 @@ export default function CookApp() {
     }
   };
 
+  const handleLeaveKitchen = async (ownerId: string) => {
+    if (!user) return;
+    if (!window.confirm("Are you sure you want to leave this kitchen? You will no longer have access to their menu.")) return;
+    
+    try {
+      setLoading(true);
+      const cookRef = doc(db, 'cooks', user.uid);
+      await updateDoc(cookRef, {
+        ownerIds: arrayRemove(ownerId),
+        updatedAt: new Date().toISOString()
+      });
+      
+      if (activeOwnerId === ownerId) {
+        setActiveOwnerId(null);
+      }
+      
+      setHouseholds(prev => prev.filter(h => h.ownerId !== ownerId));
+    } catch (err: any) {
+      console.error("Failed to leave kitchen:", err);
+      setError(err.message || 'Failed to leave kitchen.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeOwnerId) {
       localStorage.setItem('souschef_active_owner_id', activeOwnerId);
@@ -172,7 +218,6 @@ export default function CookApp() {
       } else {
         if (!name.trim()) throw new Error("Please enter your name");
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // Create cook profile immediately
         await setDoc(doc(db, 'cooks', userCredential.user.uid), {
           name: name.trim(),
           email: email,
@@ -207,13 +252,11 @@ export default function CookApp() {
       const { ownerId } = inviteSnap.data();
       const cookRef = doc(db, 'cooks', user.uid);
       
-      // Update profile
       await updateDoc(cookRef, {
         ownerIds: arrayUnion(ownerId),
         updatedAt: new Date().toISOString()
       });
       
-      // Invalidate code
       await deleteDoc(inviteRef);
 
       const ownerSnap = await getDoc(doc(db, 'owners', ownerId));
@@ -244,143 +287,176 @@ export default function CookApp() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-orange-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+      <div className="flex items-center justify-center min-h-screen bg-[var(--cream)] paper-grain">
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="rounded-full h-12 w-12 border-4 border-[var(--terracotta)] border-t-transparent shadow-xl"
+        />
       </div>
     );
   }
 
-  // Auth Screen
+  if (user && needsVerification) {
+    return (
+      <VerificationGate
+        user={user}
+        role="cook"
+        isExistingUser={isExistingCook}
+        onVerifyComplete={() => setNeedsVerification(false)}
+        onSkip={() => setNeedsVerification(false)}
+      />
+    );
+  }
+
   if (!user) {
     return (
-      <div className="min-h-screen bg-orange-50 flex flex-col items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl border border-orange-100 p-8">
-          <div className="text-center mb-8">
-            <div className="bg-orange-500 w-16 h-16 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-lg rotate-3">
-              <Home size={32} />
+      <div className="min-h-screen bg-[var(--cream)] paper-grain flex flex-col items-center justify-center p-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full bg-white rounded-[40px] shadow-[0_32px_64px_-16px_rgba(184,80,59,0.15)] border border-[var(--cream-dark)] p-10 relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--terracotta)]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+          
+          <div className="text-center mb-10 relative z-10">
+            <div className="bg-[var(--terracotta)] w-20 h-20 rounded-[28px] flex items-center justify-center text-white mx-auto mb-6 shadow-[0_12px_24px_rgba(184,80,59,0.3)] rotate-3 animate-float-slow">
+              <ChefHat size={40} strokeWidth={2.5} />
             </div>
-            <h1 className="text-3xl font-black text-gray-900">Cook Portal</h1>
-            <p className="text-gray-500 font-medium">Join a kitchen to start your shift</p>
+            <h1 className="text-3xl font-[var(--font-display)] font-bold text-[var(--charcoal)] tracking-tight">Cook Portal</h1>
+            <p className="text-[var(--charcoal-soft)] font-medium opacity-60">Join a kitchen to start your shift</p>
           </div>
 
-          <form onSubmit={handleAuth} className="space-y-4">
-            {authMode === 'register' && (
-              <div>
-                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Full Name</label>
-                <div className="relative">
-                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={18} />
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold"
-                    placeholder="Enter your name"
-                  />
-                </div>
-              </div>
-            )}
+          <form onSubmit={handleAuth} className="space-y-6 relative z-10">
+            <AnimatePresence mode="wait">
+              {authMode === 'register' && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Full Name</label>
+                  <div className="relative group">
+                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400 shadow-inner"
+                      placeholder="Enter your name"
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={18} />
+              <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Email</label>
+              <div className="relative group">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold"
+                  className="w-full pl-12 pr-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400 shadow-inner"
                   placeholder="cook@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-1 ml-1">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={18} />
+              <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Password</label>
+              <div className="relative group">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={20} />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold"
+                  className="w-full pl-12 pr-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400 shadow-inner"
                   placeholder="••••••••"
                 />
               </div>
             </div>
 
-            {error && <p className="text-red-500 text-xs font-bold px-1">{error}</p>}
+            {error && <p className="text-[var(--terracotta)] text-xs font-bold px-1">{error}</p>}
 
             <button
               type="submit"
               disabled={authLoading}
-              className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-600 transition-all shadow-lg hover:shadow-orange-200 disabled:opacity-50 flex items-center justify-center"
+              className="w-full bg-[var(--terracotta)] text-white py-5 rounded-2xl font-black text-lg hover:bg-[var(--terracotta-deep)] transition-all shadow-[0_12px_24px_rgba(184,80,59,0.2)] hover:shadow-[0_16px_32px_rgba(184,80,59,0.3)] disabled:opacity-50 flex items-center justify-center gap-3"
             >
-              {authLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : (authMode === 'login' ? 'Sign In' : 'Create Account')}
+              {authLoading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="h-5 w-5 border-2 border-white border-t-transparent rounded-full" /> : (authMode === 'login' ? 'Sign In' : 'Create Account')}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-8 text-center">
             <button
               onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
-              className="text-orange-600 text-sm font-bold hover:underline"
+              className="text-[var(--terracotta)] text-sm font-bold hover:underline opacity-80 hover:opacity-100"
             >
               {authMode === 'login' ? "New here? Create an account" : "Already have an account? Sign In"}
             </button>
           </div>
 
-          <div className="mt-8 relative">
+          <div className="mt-10 relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-orange-100"></div>
+              <div className="w-full border-t border-[var(--cream-dark)]"></div>
             </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-white text-gray-400 font-black uppercase tracking-widest">Or continue with</span>
+            <div className="relative flex justify-center text-[10px]">
+              <span className="px-4 bg-white text-gray-400 font-black uppercase tracking-widest">Secure Login</span>
             </div>
           </div>
 
           <button
             onClick={loginWithGoogle}
-            className="mt-6 w-full flex items-center justify-center gap-3 bg-white border-2 border-orange-100 py-3.5 rounded-2xl font-bold text-gray-700 hover:bg-orange-50 hover:border-orange-200 transition-all shadow-sm"
+            className="mt-8 w-full flex items-center justify-center gap-3 bg-white border-2 border-[var(--cream-dark)] py-4 rounded-2xl font-bold text-[var(--charcoal)] hover:bg-[var(--cream)] transition-all shadow-sm group"
           >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5 group-hover:scale-110 transition-transform" alt="Google" />
             Sign in with Google
           </button>
-        </div>
+        </motion.div>
       </div>
     );
   }
 
-  // Dashboard / Selection View
   if (activeOwnerId && !isAddingNew) {
     const activeHouse = households.find(h => h.ownerId === activeOwnerId);
     return (
-      <div className="min-h-screen bg-orange-50 flex flex-col">
-        <header className="bg-orange-600 text-white p-4 shadow-lg flex items-center justify-between sticky top-0 z-20">
-          <div className="flex items-center gap-3">
-            <Home size={24} />
-            <span className="font-black text-lg tracking-tight">SousChefAI</span>
+      <div className="min-h-screen bg-[var(--cream)] paper-grain flex flex-col">
+        {/* Conduct-style Header */}
+        <header className="bg-white/80 backdrop-blur-xl border-b border-[var(--cream-dark)] p-4 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+          <div className="flex items-center gap-4">
+            <Link to="/owner" className="p-2 bg-[var(--cream)] rounded-xl text-[var(--charcoal-soft)] hover:bg-[var(--cream-dark)] transition-colors shadow-inner">
+              <Home size={20} />
+            </Link>
+            <div className="flex flex-col">
+              <span className="text-xs font-black uppercase tracking-widest text-[var(--terracotta)] opacity-60">Chef Mode</span>
+              <span className="font-[var(--font-display)] font-bold text-[var(--charcoal)] tracking-tight">SousChefAI</span>
+            </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end text-[10px] uppercase tracking-tighter opacity-90 leading-tight">
-              <span className="font-black truncate max-w-[100px] text-orange-100">{activeHouse?.society}</span>
-              <span className="font-bold">{activeHouse?.tower} {activeHouse?.flat}</span>
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex flex-col items-end text-[10px] uppercase tracking-tighter opacity-70 leading-tight mr-2">
+              <span className="font-black text-[var(--charcoal)]">{activeHouse?.society}</span>
+              <span className="font-bold text-[var(--terracotta)]">{activeHouse?.tower} {activeHouse?.flat}</span>
             </div>
             <button 
               onClick={() => setActiveOwnerId(null)}
-              className="p-2 bg-orange-700 rounded-xl hover:bg-orange-800 transition-colors shadow-inner"
+              className="p-3 bg-[var(--cream)] text-[var(--charcoal-soft)] rounded-xl hover:bg-[var(--cream-dark)] transition-colors shadow-inner flex items-center gap-2"
               title="Switch Kitchen"
             >
-              <ChevronRight size={20} className="rotate-180" />
+              <ChevronRight size={18} className="rotate-180" />
+              <span className="hidden md:inline text-xs font-black uppercase tracking-widest">Switch</span>
             </button>
             <button 
               onClick={() => logout()}
-              className="p-2 bg-red-600 rounded-xl hover:bg-red-700 transition-colors shadow-inner"
+              className="p-3 bg-[var(--terracotta)]/10 text-[var(--terracotta)] rounded-xl hover:bg-[var(--terracotta)] hover:text-white transition-all shadow-sm"
               title="Sign Out"
             >
-              <LogOut size={20} />
+              <LogOut size={18} />
             </button>
           </div>
         </header>
@@ -393,81 +469,133 @@ export default function CookApp() {
   }
 
   return (
-    <div className="min-h-screen bg-orange-50 p-6 flex flex-col items-center">
-      <div className="max-w-md w-full mt-8 text-center">
-        <div className="bg-orange-500 w-20 h-20 rounded-3xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl rotate-3">
-          <UserIcon size={40} strokeWidth={3} />
-        </div>
-        <h1 className="text-4xl font-black text-gray-900 mb-2">Hi, {userProfile?.name?.split(' ')[0] || 'Cook'}!</h1>
-        <p className="text-gray-500 font-medium mb-10">Select a kitchen to start your shift</p>
+    <div className="min-h-screen bg-[var(--cream)] paper-grain p-6 flex flex-col items-center">
+      <div className="max-w-md w-full mt-12 text-center">
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="bg-[var(--terracotta)] w-24 h-24 rounded-[32px] flex items-center justify-center text-white mx-auto mb-8 shadow-2xl rotate-3"
+        >
+          <UserIcon size={48} strokeWidth={2.5} />
+        </motion.div>
+        
+        <motion.h1 
+          initial={{ y: 10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.2 }}
+          className="text-4xl font-[var(--font-display)] font-bold text-[var(--charcoal)] mb-3 tracking-tight"
+        >
+          Hi, {userProfile?.name?.split(' ')[0] || 'Chef'}!
+        </motion.h1>
+        <motion.p 
+          initial={{ y: 10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="text-[var(--charcoal-soft)] font-medium mb-12 opacity-60"
+        >
+          Select a kitchen to start your shift
+        </motion.p>
 
         {households.length > 0 && !isAddingNew ? (
           <div className="space-y-4 text-left">
-            <h2 className="text-xs font-black uppercase tracking-widest text-gray-400 ml-2">Connected Kitchens</h2>
-            {households.map((h) => (
-              <button
-                key={h.ownerId}
-                onClick={() => setActiveOwnerId(h.ownerId)}
-                className="w-full bg-white p-5 rounded-3xl border-2 border-transparent hover:border-orange-500 shadow-sm hover:shadow-md transition-all flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="bg-orange-50 p-3 rounded-2xl text-orange-600 group-hover:bg-orange-500 group-hover:text-white transition-colors">
-                    <Building2 size={24} />
-                  </div>
-                  <div>
-                    <p className="font-black text-gray-800 text-lg">{h.society}</p>
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-tighter">
-                      {h.tower} • {h.flat}
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight className="text-gray-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all" size={24} />
-              </button>
-            ))}
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--charcoal-soft)] ml-4 mb-4 opacity-40">Connected Kitchens</h2>
+            <div className="stagger">
+              {households.map((h, idx) => (
+                <motion.div 
+                  key={h.ownerId} 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 * idx }}
+                  className="relative group mb-4"
+                >
+                  <button
+                    onClick={() => setActiveOwnerId(h.ownerId)}
+                    className="w-full bg-white p-6 rounded-[32px] border border-transparent hover:border-[var(--terracotta)]/30 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(184,80,59,0.1)] transition-all flex items-center justify-between group-hover:pr-20"
+                  >
+                    <div className="flex items-center gap-5">
+                      <div className="bg-[var(--cream)] p-4 rounded-2xl text-[var(--terracotta)] group-hover:bg-[var(--terracotta)] group-hover:text-white transition-all shadow-inner">
+                        <Building2 size={24} strokeWidth={2.5} />
+                      </div>
+                      <div>
+                        <p className="font-[var(--font-display)] font-bold text-[var(--charcoal)] text-xl text-left tracking-tight">{h.society}</p>
+                        <p className="text-[10px] font-black text-[var(--charcoal-soft)] uppercase tracking-widest opacity-40 text-left mt-1">
+                          {h.tower} • {h.flat}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="text-gray-300 group-hover:text-[var(--terracotta)] group-hover:translate-x-1 transition-all" size={24} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLeaveKitchen(h.ownerId);
+                    }}
+                    className="absolute right-6 top-1/2 -translate-y-1/2 p-3 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100"
+                    title="Leave Kitchen"
+                  >
+                    <LogOut size={22} />
+                  </button>
+                </motion.div>
+              ))}
+            </div>
             
-            <button
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
               onClick={() => setIsAddingNew(true)}
-              className="w-full mt-6 flex items-center justify-center gap-2 p-5 border-2 border-dashed border-gray-300 rounded-3xl text-gray-400 hover:text-orange-500 hover:border-orange-500 transition-all font-bold"
+              className="w-full mt-8 flex items-center justify-center gap-3 p-6 border-2 border-dashed border-[var(--cream-dark)] rounded-[32px] text-[var(--charcoal-soft)] opacity-50 hover:opacity-100 hover:text-[var(--terracotta)] hover:border-[var(--terracotta)]/30 transition-all font-bold group"
             >
-              <PlusCircle size={24} />
-              Connect Another Kitchen
-            </button>
+              <PlusCircle size={22} className="group-hover:rotate-90 transition-transform duration-500" />
+              <span className="text-sm font-black uppercase tracking-widest">Connect Another Kitchen</span>
+            </motion.button>
           </div>
         ) : (
-          <div className="bg-white p-8 rounded-[40px] shadow-2xl border border-orange-100 w-full text-left">
-            <h2 className="text-2xl font-black text-gray-800 mb-2">Connect Kitchen</h2>
-            <p className="text-sm font-medium text-gray-400 mb-8 uppercase tracking-widest">Enter the code from the owner app</p>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white p-10 rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-[var(--cream-dark)] w-full text-left relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--terracotta)]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
             
-            <form onSubmit={handleManualConnect} className="space-y-6">
+            <h2 className="text-2xl font-[var(--font-display)] font-bold text-[var(--charcoal)] mb-2 tracking-tight relative z-10">Connect Kitchen</h2>
+            <p className="text-[10px] font-black text-[var(--charcoal-soft)] mb-10 uppercase tracking-widest opacity-40 relative z-10">Enter the code from the owner app</p>
+            
+            <form onSubmit={handleManualConnect} className="space-y-6 relative z-10">
               <div>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" size={20} />
+                <div className="relative group">
+                  <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={24} />
                   <input
                     type="text"
                     required
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold text-lg"
+                    className="w-full pl-14 pr-6 py-5 bg-[var(--cream)]/50 border-2 border-transparent rounded-[24px] focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] text-xl placeholder:text-gray-300 shadow-inner"
                     placeholder="6-character code"
                   />
                 </div>
-                {error && <p className="mt-2 text-red-500 text-xs font-bold px-4">{error}</p>}
+                {error && <p className="mt-3 text-[var(--terracotta)] text-xs font-bold px-5">{error}</p>}
               </div>
 
               <button
                 type="submit"
                 disabled={authLoading || !inviteCode.trim()}
-                className="w-full bg-orange-500 text-white py-4 rounded-2xl font-black text-lg hover:bg-orange-600 transition-all shadow-lg hover:shadow-orange-200 disabled:opacity-50 flex items-center justify-center gap-3"
+                className="w-full bg-[var(--terracotta)] text-white py-5 rounded-[24px] font-black text-lg hover:bg-[var(--terracotta-deep)] transition-all shadow-[0_12px_24px_rgba(184,80,59,0.2)] hover:shadow-[0_16px_32px_rgba(184,80,59,0.3)] disabled:opacity-50 flex items-center justify-center gap-3"
               >
-                {authLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : 'Connect & Open Menu'}
+                {authLoading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="h-5 w-5 border-2 border-white border-t-transparent rounded-full" /> : (
+                  <>
+                    <Sparkles size={20} />
+                    <span>Connect & Open Menu</span>
+                  </>
+                )}
               </button>
               
-              <div className="flex flex-col gap-2 mt-4">
+              <div className="flex flex-col gap-4 mt-6">
                 {households.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setIsAddingNew(false)}
-                    className="w-full text-center text-gray-400 hover:text-gray-600 font-bold text-sm"
+                    className="w-full text-center text-[var(--charcoal-soft)] opacity-40 hover:opacity-100 font-black text-[10px] uppercase tracking-widest transition-opacity"
                   >
                     Back to kitchen list
                   </button>
@@ -475,13 +603,13 @@ export default function CookApp() {
                 <button
                   type="button"
                   onClick={() => logout()}
-                  className="w-full text-center text-red-400 hover:text-red-600 font-bold text-sm"
+                  className="w-full text-center text-red-300 hover:text-red-500 font-black text-[10px] uppercase tracking-widest transition-colors"
                 >
                   Sign Out
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         )}
       </div>
     </div>

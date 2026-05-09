@@ -16,6 +16,8 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
   const [tower, setTower] = useState('');
   const [flat, setFlat] = useState('');
   const [cookLanguage, setCookLanguage] = useState<'Bengali' | 'Hindi'>('Bengali');
+  const [dietaryPreference, setDietaryPreference] = useState<'veg' | 'non-veg' | 'egg'>('non-veg');
+  const [viewPreference, setViewPreference] = useState<'casual' | 'power'>('casual');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -53,6 +55,8 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
             setTower(data.tower || '');
             setFlat(data.flat || '');
             setCookLanguage(data.cookLanguage || 'Bengali');
+            setDietaryPreference(data.dietaryPreference || 'non-veg');
+            setViewPreference(data.viewPreference || 'casual');
             hasOwnHousehold = true;
           }
         }
@@ -140,6 +144,7 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
           email: user.email,
           name: user.displayName || user.email
         }),
+        authorizedUids: arrayUnion(user.uid),
         authorizedEmails: arrayRemove(email)
       });
       
@@ -178,9 +183,12 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
         tower,
         flat,
         cookLanguage,
+        dietaryPreference,
         email: auth.currentUser.email,
         updatedAt: new Date().toISOString(),
-        joinedHouseholdId: null 
+        joinedHouseholdId: null,
+        viewPreference,
+        authorizedUids: arrayUnion(uid)
       };
 
       await setDoc(doc(db, 'owners', uid), ownerData, { merge: true });
@@ -212,30 +220,30 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
   if (mode === 'detecting') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mb-4"></div>
-        <p className="text-gray-500 font-medium">Checking for family invitations...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--terracotta)] mb-4"></div>
+        <p className="text-[var(--warm-gray)] font-medium">Checking for family invitations...</p>
       </div>
     );
   }
 
   if (success) {
     return (
-      <div className="max-w-2xl mx-auto my-12 p-8 bg-white rounded-2xl shadow-xl text-center">
-        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-          <CheckCircle className="text-green-600" size={40} />
+      <div className="max-w-2xl mx-auto my-6 p-6 bg-white rounded-2xl shadow-xl text-center">
+        <div className="w-16 h-16 bg-[var(--sage)]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <CheckCircle className="text-[var(--sage)]" size={32} />
         </div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Success!</h2>
-        <p className="text-gray-600">You have joined the household. Getting things ready...</p>
+        <h2 className="text-xl font-[var(--font-display)] font-bold text-[var(--charcoal)] mb-1">Success!</h2>
+        <p className="text-xs text-[var(--charcoal-soft)] opacity-70">You have joined the household. Getting things ready...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 md:p-8 bg-white rounded-2xl shadow-sm border border-gray-100 mt-8">
-      <div className="flex border-b border-gray-100 -mx-6 md:-mx-8 mb-8">
+    <div className="max-w-2xl mx-auto p-6 md:p-8 bg-white rounded-2xl shadow-sm border border-gray-100 mt-4">
+      <div className="flex border-b border-gray-100 -mx-6 md:-mx-8 mb-6">
         <button
           onClick={() => setMode('create')}
-          className={`flex-1 py-4 font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center ${mode === 'create' ? 'text-orange-600 border-b-2 border-orange-600 bg-orange-50/30' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`flex-1 py-4 font-black text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center justify-center ${mode === 'create' ? 'text-[var(--terracotta)] border-b-2 border-[var(--terracotta)] bg-[var(--terracotta)]/5' : 'text-[var(--warm-gray)] hover:text-[var(--charcoal)]'}`}
         >
           <Home size={18} className="mr-2" />
           My Household
@@ -243,7 +251,7 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
         <button
           onClick={() => setMode('join')}
           disabled={invitations.length === 0}
-          className={`flex-1 py-4 font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center ${mode === 'join' ? 'text-orange-600 border-b-2 border-orange-600 bg-orange-50/30' : 'text-gray-500 hover:text-gray-700 disabled:opacity-30'}`}
+          className={`flex-1 py-4 font-black text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center justify-center ${mode === 'join' ? 'text-[var(--terracotta)] border-b-2 border-[var(--terracotta)] bg-[var(--terracotta)]/5' : 'text-[var(--warm-gray)] hover:text-[var(--charcoal)] disabled:opacity-30'}`}
         >
           <Users size={18} className="mr-2" />
           Invitations ({invitations.length})
@@ -251,15 +259,15 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
       </div>
 
       <div className="flex justify-center mb-4">
-        <div className="bg-orange-100 text-orange-600 p-4 rounded-full">
+        <div className="bg-[var(--terracotta)]/10 text-[var(--terracotta)] p-5 rounded-[24px] shadow-sm">
           {mode === 'create' ? <Home size={32} /> : <Mail size={32} />}
         </div>
       </div>
 
-      <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
+      <h2 className="text-2xl font-[var(--font-display)] font-bold text-center text-[var(--charcoal)] mb-2">
         {mode === 'create' ? 'Household Profile' : 'Family Invitations'}
       </h2>
-      <p className="text-center text-gray-500 mb-8">
+      <p className="text-center text-[var(--charcoal-soft)] opacity-60 font-medium mb-6 max-w-sm mx-auto text-sm">
         {mode === 'create' 
           ? 'Tell us about your household to personalize your experience.'
           : 'You have been invited to join an existing household.'}
@@ -286,12 +294,12 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
           <div className="relative">
-            <UserIcon className="absolute left-3 top-3 text-gray-400" size={20} />
+            <UserIcon className="absolute left-3 top-3 text-[var(--terracotta)] opacity-40" size={20} />
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+              className="w-full pl-10 pr-4 py-3 bg-[var(--cream)]/50 border border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] placeholder:text-gray-400"
               placeholder="Your Name"
               required
             />
@@ -394,10 +402,10 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
           </div>
         </div>
         <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Cook's Language Preference</label>
+          <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-3 ml-1">Cook's Language Preference</label>
           <div className="flex gap-4">
-            {['Bengali', 'Hindi'].map((lang) => (
-              <label key={lang} className={`flex-1 flex items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-all ${cookLanguage === lang ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm' : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200'}`}>
+            {['Hindi', 'Bengali'].map((lang) => (
+              <label key={lang} className={`flex-1 flex items-center justify-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${cookLanguage === lang ? 'border-[var(--terracotta)] bg-[var(--terracotta)]/5 text-[var(--terracotta-deep)] shadow-sm' : 'border-[var(--cream-dark)] bg-white text-[var(--warm-gray)] hover:border-[var(--terracotta)]/20'}`}>
                 <input
                   type="radio"
                   className="hidden"
@@ -407,24 +415,74 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
                   onChange={() => setCookLanguage(lang as any)}
                 />
                 <Languages size={18} className="mr-2" />
-                <span className="font-bold">{lang}</span>
+                <span className="font-black text-xs uppercase tracking-widest">{lang}</span>
               </label>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-2 uppercase tracking-widest">The AI will generate recipes and instructions in this script.</p>
+          <p className="text-[9px] text-[var(--warm-gray)] mt-3 uppercase tracking-widest opacity-60">The AI will generate recipes and instructions in this script.</p>
+        </div>
+
+        <div className="mt-8">
+          <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-3 ml-1">Household Dietary Preference</label>
+          <div className="flex gap-4">
+            {[
+              { id: 'veg', label: 'Vegetarian', icon: '🟢' },
+              { id: 'egg', label: 'Eggitarian', icon: '🟡' },
+              { id: 'non-veg', label: 'Non-Veg', icon: '🔴' }
+            ].map((pref) => (
+              <label key={pref.id} className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${dietaryPreference === pref.id ? 'border-[var(--terracotta)] bg-[var(--terracotta)]/5 text-[var(--terracotta-deep)] shadow-sm' : 'border-[var(--cream-dark)] bg-white text-[var(--warm-gray)] hover:border-[var(--terracotta)]/20'}`}>
+                <input
+                  type="radio"
+                  className="hidden"
+                  name="dietaryPreference"
+                  value={pref.id}
+                  checked={dietaryPreference === pref.id}
+                  onChange={() => setDietaryPreference(pref.id as any)}
+                />
+                <span className="text-2xl mb-2">{pref.icon}</span>
+                <span className="font-black text-[10px] uppercase tracking-widest">{pref.label}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-[9px] text-[var(--warm-gray)] mt-3 uppercase tracking-widest opacity-60">AI suggestions will prioritize this preference.</p>
+        </div>
+
+        <div className="mt-8">
+          <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-3 ml-1">Dashboard Experience</label>
+          <div className="flex gap-4">
+            {[
+              { id: 'casual', label: 'Casual', icon: '🎨', desc: 'Focus on Aesthetics' },
+              { id: 'power', label: 'Power', icon: '⚡', desc: 'Focus on Data' }
+            ].map((pref) => (
+              <label key={pref.id} className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${viewPreference === pref.id ? 'border-[var(--terracotta)] bg-[var(--terracotta)]/5 text-[var(--terracotta-deep)] shadow-sm' : 'border-[var(--cream-dark)] bg-white text-[var(--warm-gray)] hover:border-[var(--terracotta)]/20'}`}>
+                <input
+                  type="radio"
+                  className="hidden"
+                  name="viewPreference"
+                  value={pref.id}
+                  checked={viewPreference === pref.id}
+                  onChange={() => setViewPreference(pref.id as any)}
+                />
+                <span className="text-2xl mb-1">{pref.icon}</span>
+                <span className="font-black text-[10px] uppercase tracking-widest">{pref.label}</span>
+                <span className="text-[8px] font-medium opacity-60 mt-1">{pref.desc}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-[9px] text-[var(--warm-gray)] mt-3 uppercase tracking-widest opacity-60">Choose how much data you want to see at a glance.</p>
         </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mt-8"
+            className="w-full py-4 px-6 bg-[var(--charcoal)] hover:bg-[var(--charcoal-soft)] text-white rounded-[24px] font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mt-6 shadow-xl hover:shadow-[var(--charcoal)]/20 hover:-translate-y-0.5"
           >
             {loading ? (
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
             ) : (
-              <CheckCircle className="mr-2" size={20} />
+              <CheckCircle className="mr-2" size={18} />
             )}
-            {existingHousehold ? 'Update Profile' : 'Save Profile'}
+            {existingHousehold ? 'Update Profile' : 'Create My Household'}
           </button>
         </form>
       ) : (
@@ -444,20 +502,20 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
 
           <div className="space-y-4">
             {invitations.map(invite => (
-              <div key={invite.id} className="p-6 bg-orange-50 rounded-2xl border border-orange-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div key={invite.id} className="p-6 bg-[var(--terracotta)]/5 rounded-3xl border border-[var(--terracotta)]/10 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-orange-600 shadow-sm mr-4">
+                  <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-[var(--terracotta)] shadow-sm mr-4 border border-[var(--terracotta)]/10">
                     <Mail size={24} />
                   </div>
                   <div>
-                    <p className="font-bold text-gray-900">{invite.ownerName}'s Household</p>
-                    <p className="text-sm text-gray-500">{invite.email}</p>
+                    <p className="font-black text-[var(--charcoal)] uppercase text-xs tracking-widest">{invite.ownerName}'s Household</p>
+                    <p className="text-sm text-[var(--warm-gray)]">{invite.email}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => handleJoinHousehold(invite.id)}
                   disabled={loading}
-                  className="w-full sm:w-auto px-6 py-2 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 transition-colors shadow-md disabled:opacity-50"
+                  className="w-full sm:w-auto px-8 py-3 bg-[var(--charcoal)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--charcoal-soft)] transition-all shadow-lg disabled:opacity-50"
                 >
                   {loading ? 'Joining...' : 'Join Family'}
                 </button>

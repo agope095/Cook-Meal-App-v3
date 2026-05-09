@@ -1,3 +1,5 @@
+import type { PagesFunction } from '@cloudflare/workers-types';
+
 interface Env {
   NVIDIA_API_KEY: string;
   GEMINI_API_KEY: string;
@@ -5,7 +7,7 @@ interface Env {
 }
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-type AIAction = 'meal-plan' | 'chat' | 'batch-translate' | 'single-translate';
+type AIAction = 'meal-plan' | 'chat' | 'batch-translate' | 'single-translate' | 'batch-nutrition';
 
 const jsonResponse = (statusCode: number, body: unknown) => new Response(JSON.stringify(body), {
   status: statusCode,
@@ -71,13 +73,21 @@ const callNvidia = async (messages: ChatMessage[], env: Env, temperature = 0.5) 
   return data.choices?.[0]?.message?.content || '';
 };
 
-const callGemini = async (prompt: string, env: Env) => {
+const callGemini = async (promptOrMessages: string | ChatMessage[], env: Env) => {
   const geminiKey = (env.GEMINI_API_KEY || '').trim();
   if (!geminiKey) throw new Error('GEMINI_API_KEY is missing on the server.');
 
+  let prompt = '';
+  if (typeof promptOrMessages === 'string') {
+    prompt = promptOrMessages;
+  } else {
+    // Basic conversion of messages to prompt for Gemini
+    prompt = promptOrMessages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+  }
+
   console.log('[DEBUG] Calling Gemini API via fetch...');
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -99,7 +109,7 @@ const callGemini = async (prompt: string, env: Env) => {
   return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 };
 
-export const onRequestOptions: PagesFunction = async () => {
+export const onRequestOptions: any = async () => {
   return new Response(null, {
     status: 204,
     headers: {
@@ -111,7 +121,7 @@ export const onRequestOptions: PagesFunction = async () => {
   });
 };
 
-export const onRequestPost: PagesFunction<Env> = async (context) => {
+export const onRequestPost: any = async (context: any) => {
   const { request, env } = context;
   console.log('[DEBUG] AI Function triggered at:', new Date().toISOString());
 
@@ -139,7 +149,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const userProfile = payload.userProfile || {};
     const cookLanguage = userProfile.cookLanguage || 'Bengali';
-    const userInfo = userProfile.name ? `User Name: ${userProfile.name}. City: ${userProfile.city || 'Unknown'}. Society: ${userProfile.society || 'Unknown'}. Cook's Language: ${cookLanguage}.` : `Cook's Language: ${cookLanguage}.`;
+    // User info for general context (name, location)
+    const baseUserInfo = userProfile.name ? `User Name: ${userProfile.name}. City: ${userProfile.city || 'Unknown'}. Society: ${userProfile.society || 'Unknown'}.` : '';
+    // Specific info about the cook's language for translation/meal planning
+    const cookLanguageInfo = `Cook's Language: ${cookLanguage}.`;
+    
     const userMemory = payload.culinaryMemory || 'No personal preferences recorded yet.';
 
     // Memory Summarization check (Keep context lean)
@@ -159,7 +173,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (action === 'meal-plan') {
       const { prompt, startDate, existingDraft, pastMeals, favorites } = payload;
-      let systemInstruction = `You are an expert AI meal planner. ${userInfo}\nStart date: ${startDate}.\n`;
+      let systemInstruction = `You are an expert AI meal planner. ${baseUserInfo} ${cookLanguageInfo}\nStart date: ${startDate}.\n`;
       systemInstruction += `USER MEMORY/PREFERENCES: ${currentMemory}\n`;
       systemInstruction += `STRICT FOCUS: Only modify the specific meal (lunch/dinner) or date mentioned in the User Request. Do NOT suggest new items for other meals if they already have content or if you can leave them empty.
 INSTRUCTION RULE: Leave "instruction" and "instructionBn" as empty strings ("") unless the user explicitly asks for instructions, recipes, or if there is a critical dietary note. Do not add general descriptions of the dishes.
@@ -172,7 +186,8 @@ SCHEMA: Return ONLY a JSON array of objects with this EXACT structure:
     "quantity": "string", 
     "quantityBn": "${cookLanguage} script translation",
     "instruction": "string",
-    "instructionBn": "${cookLanguage} script translation"
+    "instructionBn": "${cookLanguage} script translation",
+    "nutrition": { "kcal": number, "protein": number, "carbs": number, "fat": number }
   }],
   "dinner": [{
     "name": "string", 
@@ -180,21 +195,30 @@ SCHEMA: Return ONLY a JSON array of objects with this EXACT structure:
     "quantity": "string", 
     "quantityBn": "${cookLanguage} script translation",
     "instruction": "string",
-    "instructionBn": "${cookLanguage} script translation"
+    "instructionBn": "${cookLanguage} script translation",
+    "nutrition": { "kcal": number, "protein": number, "carbs": number, "fat": number }
   }]
 }]
-If no items for lunch/dinner, return an empty array []. Keep suggestions healthy and balanced. Use high-quality ${cookLanguage} script.`;
+If no items for lunch/dinner, return an empty array []. Keep suggestions healthy and balanced. Use high-quality ${cookLanguage} script. QUANTITY RULE: If a quantity is mentioned, calculate nutrition for that amount. Otherwise, estimate based on typical portion sizes.`;
 
       if (pastMeals) systemInstruction += `\nPast meals:\n${pastMeals}`;
       if (favorites?.length) systemInstruction += `\nFavorites:\n${favorites.join(', ')}`;
       const contents = existingDraft?.length ? `Current Draft:\n${JSON.stringify(existingDraft)}\nTweak Request: ${prompt}` : prompt;
-      const rawText = await callNvidia([{ role: 'user', content: `${systemInstruction}\nRequest: ${contents}` }], env, 0.5);
+      
+      let rawText = '';
+      try {
+        rawText = await callNvidia([{ role: 'user', content: `${systemInstruction}\nRequest: ${contents}` }], env, 0.5);
+      } catch (err) {
+        console.warn('[WARN] NVIDIA failed for meal-plan, falling back to Gemini:', err);
+        rawText = await callGemini(`${systemInstruction}\nRequest: ${contents}`, env);
+      }
       return jsonResponse(200, { data: extractJsonArray(rawText) });
     }
 
     if (action === 'chat') {
       const { messages, pastMeals, favorites, currentDate } = payload;
-      let systemInstruction = `You are "SousChefAI", a friendly, slightly chatty, and knowledgeable culinary assistant. ${userInfo}\n`;
+      let systemInstruction = `You are "SousChefAI", a friendly, slightly chatty, and knowledgeable culinary assistant. ${baseUserInfo}\n`;
+      systemInstruction += `STRICT RULE: Respond in English (the user's language) regardless of the cook's language setting. Your goal is to assist the household owner.\n`;
 
       systemInstruction += `CURRENT DATE: ${currentDate || new Date().toISOString()}\n`;
       systemInstruction += `USER MEMORY: ${currentMemory}\n`;
@@ -206,7 +230,13 @@ If no items for lunch/dinner, return an empty array []. Keep suggestions healthy
       if (pastMeals) systemInstruction += `\nUser's Past meals:\n${pastMeals}`;
       if (favorites?.length) systemInstruction += `\nUser's Favorites:\n${favorites.join(', ')}`;
       
-      const content = await callNvidia([{ role: 'system', content: systemInstruction }, ...(messages || [])], env, 0.7);
+      let content = '';
+      try {
+        content = await callNvidia([{ role: 'system', content: systemInstruction }, ...(messages || [])], env, 0.7);
+      } catch (err) {
+        console.warn('[WARN] NVIDIA failed for chat, falling back to Gemini:', err);
+        content = await callGemini([{ role: 'system', content: systemInstruction }, ...(messages || [])], env);
+      }
       
       try {
         const parsed = JSON.parse(content);
@@ -247,6 +277,38 @@ If no items for lunch/dinner, return an empty array []. Keep suggestions healthy
         text = await callGemini(prompt, env);
       }
       return jsonResponse(200, { data: text.trim() });
+    }
+
+    if (action === 'generate-grocery') {
+      const { meals } = payload;
+      const prompt = `Based on the following meal plan, generate a comprehensive grocery list. Categorize items (e.g., Produce, Dairy, Pantry).
+Meals: ${JSON.stringify(meals)}
+Return ONLY a JSON array of strings, where each string is an item and its approximate quantity (e.g., "Chicken - 500g", "Tomatoes - 4 large").`;
+      
+      let rawText = '';
+      try {
+        rawText = await callNvidia([{ role: 'user', content: prompt }], env, 0.3);
+      } catch {
+        rawText = await callGemini(prompt, env);
+      }
+      return jsonResponse(200, { data: extractJsonArray(rawText) });
+    }
+
+    if (action === 'batch-nutrition') {
+      const { items } = payload;
+      const prompt = `Estimate nutritional values for the following dishes. 
+STRICT RULE: You MUST return the EXACT "id" provided for each dish.
+QUANTITY RULE: If a quantity is mentioned (e.g., "6 roti" or "for 2 people"), calculate for the ENTIRE amount. If no quantity is mentioned, assume a standard single serving.
+Items: ${JSON.stringify(items)}
+Structure: [{"id": "...", "name": "...", "kcal": number, "protein": number, "carbs": number, "fat": number}]`;
+      
+      let rawText = '';
+      try {
+        rawText = await callNvidia([{ role: 'user', content: prompt }], env, 0.2);
+      } catch {
+        rawText = await callGemini(prompt, env);
+      }
+      return jsonResponse(200, { data: extractJsonArray(rawText) });
     }
 
     return jsonResponse(400, { error: `Unknown action: ${action}` });
