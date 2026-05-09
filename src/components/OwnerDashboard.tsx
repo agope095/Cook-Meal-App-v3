@@ -6,7 +6,7 @@ import { MealPlan, MealItem } from '../types';
 import { Plus, Trash2, Calendar as CalendarIcon, Save, Youtube, ChevronLeft, ChevronRight, Upload, FileText, Download, Sparkles, Heart, CheckCircle2, MessageSquare, Clock, Search, Activity, Zap, PieChart, ShoppingCart, Loader2, X, Share2, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { processMealItems, syncHistoricalData, syncNutritionForLibrary, SyncProgress, scaleNutrition } from '../services/recipeService';
-import { detectServingAnomaly, AnomalyResult } from '../services/nutritionService';
+import { detectServingAnomaly, AnomalyResult, getMacroBalance } from '../services/nutritionService';
 import AIMealPlanner from './AIMealPlanner';
 import FavoritesView from './FavoritesView';
 import WeeklyView from './WeeklyView';
@@ -871,6 +871,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                   lunch={lunchItems} 
                   dinner={dinnerItems} 
                   householdSize={userProfile?.householdSize ?? 2}
+                  appetiteMultiplier={userProfile?.appetiteMultiplier ?? 1.0}
                 />
               )}
 
@@ -1076,7 +1077,19 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                   </div>
                   <div className="text-right">
                     <p className="text-[9px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-0.5">Recommendation</p>
-                    <p className="text-xs font-bold text-[var(--terracotta-deep)]">Balanced Meal</p>
+                    {(() => {
+                      const balance = getMacroBalance(
+                        selectedMealForNutrition.nutrition?.kcal || 0,
+                        selectedMealForNutrition.nutrition?.protein || 0,
+                        selectedMealForNutrition.nutrition?.carbs || 0,
+                        selectedMealForNutrition.nutrition?.fat || 0
+                      );
+                      return (
+                        <p className="text-xs font-bold" style={{ color: balance.color }}>
+                          {balance.score}
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
 

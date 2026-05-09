@@ -21,6 +21,11 @@ export interface NutritionPer100g {
   fat: number;
 }
 
+export interface MacroBalanceResult {
+  score: string;
+  color: string;
+}
+
 export interface ServingIntelligenceResult {
   householdTotal: { kcal: number; protein: number; carbs: number; fat: number };
   perPerson: { kcal: number; protein: number; carbs: number; fat: number } | null;
@@ -56,6 +61,27 @@ export function recalculateFromPer100g(
   };
 }
 
+/**
+ * Recalculates total grams and nutrition when the number of servings changes.
+ * Uses the inferred servingGrams/servings ratio as the baseline.
+ */
+export function recalculateServingSize(
+  item: MealItem,
+  newServings: number
+): { servingGrams: number; nutrition: { kcal: number; protein: number; carbs: number; fat: number } } | null {
+  if (!item.nutrition?.per100g || !item.nutrition?.servingGrams || !item.nutrition?.servings) return null;
+
+  const gramsPerServing = item.nutrition.servingGrams / item.nutrition.servings;
+  const newTotalGrams = Math.round(gramsPerServing * newServings);
+  
+  const newNutrition = recalculateFromPer100g(item.nutrition.per100g, newTotalGrams);
+
+  return {
+    servingGrams: newTotalGrams,
+    nutrition: newNutrition
+  };
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Core: Per-Person Calculation
 // ────────────────────────────────────────────────────────────────────
@@ -63,10 +89,12 @@ export function recalculateFromPer100g(
 /**
  * Derives per-person nutrition from a list of meal items and a household size.
  * Uses the stored `servings` field if available; falls back to householdSize.
+ * Incorporates appetiteMultiplier for personalized serving sizes.
  */
 export function deriveServingContext(
   allItems: MealItem[],
-  householdSize: number
+  householdSize: number,
+  appetiteMultiplier: number = 1.0
 ): ServingIntelligenceResult {
   const itemsWithData = allItems.filter(item => item.nutrition);
   if (itemsWithData.length === 0) {
@@ -95,22 +123,87 @@ export function deriveServingContext(
     .filter((s): s is number => typeof s === 'number' && s > 0);
 
   const hasServingData = servingsValues.length > 0;
-  const inferredServings = hasServingData
+  const baseServings = hasServingData
     ? Math.round(servingsValues.reduce((a, b) => a + b, 0) / servingsValues.length)
     : householdSize;
 
-  if (!inferredServings || inferredServings <= 0) {
+  if (!baseServings || baseServings <= 0) {
     return { householdTotal, perPerson: null, inferredServings: null, hasServingData };
   }
 
+  // Calculate per person nutrition, adjusted by appetite multiplier
+  // If appetiteMultiplier is 1.2, the person eats 20% more than average.
+  // Note: We divide by total people but the "per-person" shown is for the USER (who has the appetite setting)
   const perPerson = {
-    kcal: Math.round(householdTotal.kcal / inferredServings),
-    protein: Math.round(householdTotal.protein / inferredServings),
-    carbs: Math.round(householdTotal.carbs / inferredServings),
-    fat: Math.round(householdTotal.fat / inferredServings),
+    kcal: Math.round((householdTotal.kcal / baseServings) * appetiteMultiplier),
+    protein: Math.round((householdTotal.protein / baseServings) * appetiteMultiplier),
+    carbs: Math.round((householdTotal.carbs / baseServings) * appetiteMultiplier),
+    fat: Math.round((householdTotal.fat / baseServings) * appetiteMultiplier),
   };
 
-  return { householdTotal, perPerson, inferredServings, hasServingData };
+  return { householdTotal, perPerson, inferredServings: baseServings, hasServingData };
+}
+
+/**
+ * Categorizes a meal or day based on its macronutrient balance.
+ * Uses a priority-based rule set to return a label and theme color.
+ */
+export function getMacroBalance(
+  kcal: number,
+  protein: number,
+  carbs: number,
+  fat: number
+): MacroBalanceResult {
+  if (kcal <= 0) return { score: 'No Data', color: 'var(--warm-gray)' };
+
+  const pKcal = protein * 4;
+  const cKcal = carbs * 4;
+  const fKcal = fat * 9;
+  const total = pKcal + cKcal + fKcal;
+
+  if (total <= 0) return { score: 'Balanced Fuel', color: 'var(--sage)' };
+
+  const pPct = (pKcal / total) * 100;
+  const cPct = (cKcal / total) * 100;
+  const fPct = (fKcal / total) * 100;
+
+  // PRIORITY 1: Keto Friendly (Fat > 60%, Carbs < 15%)
+  if (fPct > 60 && cPct < 15) {
+    return { score: 'Keto Friendly', color: '#8B5CF6' }; // Purple
+  }
+
+  // PRIORITY 2: Lean & Fit (Protein > 30%, Fat < 20%)
+  if (pPct > 30 && fPct < 20) {
+    return { score: 'Lean & Fit', color: '#10B981' }; // Emerald
+  }
+
+  // PRIORITY 3: High Energy (Carbs > 55%, Protein > 20%)
+  if (cPct > 55 && pPct > 20) {
+    return { score: 'High Energy', color: '#F59E0B' }; // Amber
+  }
+
+  // PRIORITY 4: Low Carb (Carbs < 25%)
+  if (cPct < 25) {
+    return { score: 'Low Carb', color: '#3B82F6' }; // Blue
+  }
+
+  // PRIORITY 5: Protein Focused (Protein > 35%)
+  if (pPct > 35) {
+    return { score: 'Protein Focused', color: 'var(--terracotta)' };
+  }
+
+  // PRIORITY 6: High Carbs (Carbs > 60%)
+  if (cPct > 60) {
+    return { score: 'High Carbs', color: 'var(--sage-light)' };
+  }
+
+  // PRIORITY 7: Healthy Fats (Fat > 35%)
+  if (fPct > 35) {
+    return { score: 'Healthy Fats', color: 'var(--terracotta-light)' };
+  }
+
+  // FALLBACK: Balanced Fuel
+  return { score: 'Balanced Fuel', color: 'var(--sage)' };
 }
 
 // ────────────────────────────────────────────────────────────────────

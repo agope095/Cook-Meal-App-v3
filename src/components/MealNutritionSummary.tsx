@@ -2,15 +2,16 @@ import React from 'react';
 import { MealItem } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Users } from 'lucide-react';
-import { deriveServingContext } from '../services/nutritionService';
+import { deriveServingContext, getMacroBalance } from '../services/nutritionService';
 
 interface MealNutritionSummaryProps {
   lunch: MealItem[];
   dinner: MealItem[];
   householdSize?: number;
+  appetiteMultiplier?: number;
 }
 
-export default function MealNutritionSummary({ lunch, dinner, householdSize = 2 }: MealNutritionSummaryProps) {
+export default function MealNutritionSummary({ lunch, dinner, householdSize = 2, appetiteMultiplier = 1.0 }: MealNutritionSummaryProps) {
   const allItems = [...lunch, ...dinner].filter(item => item.nutrition);
   
   if (allItems.length === 0) {
@@ -30,7 +31,7 @@ export default function MealNutritionSummary({ lunch, dinner, householdSize = 2 
   }
 
   // Derive both household totals and per-person via nutrition service
-  const { householdTotal: totals, perPerson, inferredServings, hasServingData } = deriveServingContext(allItems, householdSize);
+  const { householdTotal: totals, perPerson, inferredServings } = deriveServingContext(allItems, householdSize, appetiteMultiplier);
 
   // Calculate percentages based on calories
   const proteinKcal = totals.protein * 4;
@@ -42,20 +43,8 @@ export default function MealNutritionSummary({ lunch, dinner, householdSize = 2 
   const cPercent = totalKcalCalc > 0 ? (carbsKcal / totalKcalCalc) * 100 : 0;
   const fPercent = totalKcalCalc > 0 ? (fatKcal / totalKcalCalc) * 100 : 0;
 
-  // Balance Score Logic — Editorial & Warm
-  let balanceScore = "Balanced Fuel";
-  let balanceColor = "var(--sage)";
-  
-  if (pPercent > 35) {
-    balanceScore = "Protein Focused";
-    balanceColor = "var(--terracotta)";
-  } else if (cPercent > 60) {
-    balanceScore = "High Carbs";
-    balanceColor = "var(--sage-light)";
-  } else if (fPercent > 35) {
-    balanceScore = "Healthy Fats";
-    balanceColor = "var(--terracotta-light)";
-  }
+  // Use centralized macro balance logic
+  const { score: balanceScore, color: balanceColor } = getMacroBalance(totals.kcal, totals.protein, totals.carbs, totals.fat);
 
   return (
     <motion.div 
@@ -80,20 +69,19 @@ export default function MealNutritionSummary({ lunch, dinner, householdSize = 2 
           </div>
           
           <div className="text-right">
+            {/* HERO: Per Person Nutrition */}
             <div className="text-3xl font-[var(--font-display)] font-bold text-[var(--charcoal)] leading-none">
-              {totals.kcal}
+              {perPerson ? perPerson.kcal : totals.kcal}
             </div>
-            {/* Per-person context line — muted secondary, shown when serving data is available */}
-            {perPerson && inferredServings ? (
-              <div className="flex items-center justify-end gap-1 mt-1">
-                <Users size={9} className="text-[var(--warm-gray)] opacity-50" />
-                <div className="text-[9px] font-black uppercase tracking-widest text-[var(--warm-gray)] opacity-60">
-                  ~{perPerson.kcal} kcal · {inferredServings} {inferredServings === 1 ? 'person' : 'people'}
-                </div>
+            <div className="flex items-center justify-end gap-1 mt-1">
+              <div className="text-[9px] font-black uppercase tracking-widest text-[var(--warm-gray)] opacity-60">
+                {perPerson ? 'kcal per person' : 'total kcal'}
               </div>
-            ) : (
-              <div className="text-[9px] font-black uppercase tracking-widest text-[var(--warm-gray)] mt-1 opacity-60">
-                of ~2,000 kcal target
+            </div>
+            {/* SECONDARY: Household Total */}
+            {perPerson && (
+              <div className="text-[10px] font-bold text-[var(--warm-gray)] opacity-40 mt-1">
+                {totals.kcal} kcal · {inferredServings} {inferredServings === 1 ? 'person' : 'people'}
               </div>
             )}
           </div>
@@ -166,31 +154,31 @@ export default function MealNutritionSummary({ lunch, dinner, householdSize = 2 
           <div className="grid grid-cols-3 gap-2">
             <div className="bg-white/40 p-2.5 rounded-xl border border-white/60">
               <div className="text-[10px] font-black uppercase tracking-widest text-[var(--terracotta)] mb-0.5">
-                Protein {totals.protein}g
+                {perPerson ? `~${perPerson.protein}g/person` : `Protein ${totals.protein}g`}
               </div>
               {perPerson && (
                 <div className="text-[8px] text-[var(--warm-gray)] opacity-60 font-semibold">
-                  ~{perPerson.protein}g/person
+                  Protein {totals.protein}g
                 </div>
               )}
             </div>
             <div className="bg-white/40 p-2.5 rounded-xl border border-white/60">
               <div className="text-[10px] font-black uppercase tracking-widest text-[var(--sage)] mb-0.5">
-                Carbs {totals.carbs}g
+                {perPerson ? `~${perPerson.carbs}g/person` : `Carbs ${totals.carbs}g`}
               </div>
               {perPerson && (
                 <div className="text-[8px] text-[var(--warm-gray)] opacity-60 font-semibold">
-                  ~{perPerson.carbs}g/person
+                  Carbs {totals.carbs}g
                 </div>
               )}
             </div>
             <div className="bg-white/40 p-2.5 rounded-xl border border-white/60">
               <div className="text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-0.5">
-                Fats {totals.fat}g
+                {perPerson ? `~${perPerson.fat}g/person` : `Fats ${totals.fat}g`}
               </div>
               {perPerson && (
                 <div className="text-[8px] text-[var(--warm-gray)] opacity-60 font-semibold">
-                  ~{perPerson.fat}g/person
+                  Fats {totals.fat}g
                 </div>
               )}
             </div>

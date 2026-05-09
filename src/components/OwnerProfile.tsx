@@ -18,6 +18,8 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
   const [cookLanguage, setCookLanguage] = useState<'Bengali' | 'Hindi'>('Bengali');
   const [dietaryPreference, setDietaryPreference] = useState<'veg' | 'non-veg' | 'egg'>('non-veg');
   const [viewPreference, setViewPreference] = useState<'casual' | 'power'>('casual');
+  const [householdSize, setHouseholdSize] = useState(2);
+  const [appetiteMultiplier, setAppetiteMultiplier] = useState(1.0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,6 +59,8 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
             setCookLanguage(data.cookLanguage || 'Bengali');
             setDietaryPreference(data.dietaryPreference || 'non-veg');
             setViewPreference(data.viewPreference || 'casual');
+            setHouseholdSize(data.householdSize || 2);
+            setAppetiteMultiplier(data.appetiteMultiplier || 1.0);
             hasOwnHousehold = true;
           }
         }
@@ -188,6 +192,8 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
         updatedAt: new Date().toISOString(),
         joinedHouseholdId: null,
         viewPreference,
+        householdSize,
+        appetiteMultiplier,
         authorizedUids: arrayUnion(uid)
       };
 
@@ -447,29 +453,39 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
           <p className="text-[9px] text-[var(--warm-gray)] mt-3 uppercase tracking-widest opacity-60">AI suggestions will prioritize this preference.</p>
         </div>
 
-        <div className="mt-8">
-          <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-3 ml-1">Dashboard Experience</label>
-          <div className="flex gap-4">
-            {[
-              { id: 'casual', label: 'Casual', icon: '🎨', desc: 'Focus on Aesthetics' },
-              { id: 'power', label: 'Power', icon: '⚡', desc: 'Focus on Data' }
-            ].map((pref) => (
-              <label key={pref.id} className={`flex-1 flex flex-col items-center justify-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${viewPreference === pref.id ? 'border-[var(--terracotta)] bg-[var(--terracotta)]/5 text-[var(--terracotta-deep)] shadow-sm' : 'border-[var(--cream-dark)] bg-white text-[var(--warm-gray)] hover:border-[var(--terracotta)]/20'}`}>
-                <input
-                  type="radio"
-                  className="hidden"
-                  name="viewPreference"
-                  value={pref.id}
-                  checked={viewPreference === pref.id}
-                  onChange={() => setViewPreference(pref.id as any)}
-                />
-                <span className="text-2xl mb-1">{pref.icon}</span>
-                <span className="font-black text-[10px] uppercase tracking-widest">{pref.label}</span>
-                <span className="text-[8px] font-medium opacity-60 mt-1">{pref.desc}</span>
-              </label>
-            ))}
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-3 ml-1">Household Size</label>
+            <div className="relative">
+              <Users className="absolute left-3 top-3 text-[var(--terracotta)] opacity-40" size={20} />
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={householdSize}
+                onChange={(e) => setHouseholdSize(parseInt(e.target.value) || 1)}
+                className="w-full pl-10 pr-4 py-3 bg-[var(--cream)]/50 border border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)]"
+                placeholder="Number of people"
+              />
+            </div>
+            <p className="text-[9px] text-[var(--warm-gray)] mt-2 uppercase tracking-widest opacity-60">Used for per-person nutrition calculation.</p>
           </div>
-          <p className="text-[9px] text-[var(--warm-gray)] mt-3 uppercase tracking-widest opacity-60">Choose how much data you want to see at a glance.</p>
+
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-3 ml-1">Your Appetite</label>
+            <select
+              value={appetiteMultiplier}
+              onChange={(e) => setAppetiteMultiplier(parseFloat(e.target.value))}
+              className="w-full px-4 py-3 bg-[var(--cream)]/50 border border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] appearance-none"
+            >
+              <option value="0.7">Light Eater (70%)</option>
+              <option value="0.85">Small Appetite (85%)</option>
+              <option value="1.0">Normal / Average (100%)</option>
+              <option value="1.2">Healthy Appetite (120%)</option>
+              <option value="1.4">Heavy Eater (140%)</option>
+            </select>
+            <p className="text-[9px] text-[var(--warm-gray)] mt-2 uppercase tracking-widest opacity-60">Adjusts per-person nutrition for you.</p>
+          </div>
         </div>
 
           <button

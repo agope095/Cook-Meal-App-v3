@@ -61,6 +61,7 @@ export interface OwnerProfile {
   email: string;
   dietaryPreference?: 'veg' | 'non-veg' | 'egg';
   householdSize?: number;   // Default: 2. Used for per-person nutrition context.
+  appetiteMultiplier?: number; // Default: 1.0. (e.g. 0.8 for light, 1.2 for heavy).
   updatedAt: string;
   authorizedEmails?: string[];
   authorizedUids?: string[];
