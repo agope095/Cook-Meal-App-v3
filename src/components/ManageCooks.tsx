@@ -172,8 +172,9 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
                   </div>
                   <button 
                     onClick={() => deleteInviteCode(code.code)}
-                    className="p-2.5 text-[var(--warm-gray)] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    className="p-2.5 text-[var(--warm-gray)] hover:text-red-500 hover:bg-red-50 rounded-xl transition-all focus-visible:ring-2 focus-visible:ring-red-500 outline-none"
                     title="Revoke code"
+                    aria-label={`Revoke invite code ${code.code}`}
                   >
                     <Trash2 size={20} />
                   </button>
