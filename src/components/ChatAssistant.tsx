@@ -113,10 +113,18 @@ export default function ChatAssistant({ householdId }: ChatAssistantProps) {
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={handleOpen}
-          className="fixed bottom-28 right-6 sm:right-10 p-5 bg-[var(--charcoal)] text-white rounded-[24px] shadow-2xl z-50 flex items-center justify-center border border-white/10 hover:shadow-[0_20px_50px_rgba(42,37,32,0.3)] transition-all"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleOpen();
+            }
+          }}
+          tabIndex={0}
+          className="fixed bottom-28 right-6 sm:right-10 p-5 bg-[var(--charcoal)] text-white rounded-[24px] shadow-2xl z-50 flex items-center justify-center border border-white/10 hover:shadow-[0_20px_50px_rgba(42,37,32,0.3)] transition-all focus:outline-none focus:ring-2 focus:ring-[var(--terracotta)]"
+          aria-label="Open culinary assistant chat"
           title="Culinary Assistant"
         >
-          <div className="relative">
+          <div className="relative" aria-hidden="true">
             <ChefHat size={32} />
             <div className="absolute -top-1 -right-1 w-3 h-3 bg-[var(--terracotta)] rounded-full border-2 border-[var(--charcoal)] animate-pulse" />
           </div>

@@ -131,7 +131,7 @@ export default function VerificationGate({
       } catch (e) {}
     }
     try {
-      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'verification-recaptcha-container', {
         'size': 'invisible',
       });
     } catch (err) {
@@ -142,6 +142,14 @@ export default function VerificationGate({
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phoneNumber) return;
+
+    // Validate phone number format
+    const phoneRegex = /^\+\d{1,3}\s?\d{10}$/;
+    if (!phoneRegex.test(phoneNumber.trim())) {
+      setError('Please enter a valid phone number with country code (e.g., +91 98765 43210)');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -151,7 +159,13 @@ export default function VerificationGate({
       setConfirmationResult(result);
       setStep('phone-otp');
     } catch (err: any) {
-      setError(err.message || 'Failed to send OTP. Make sure the number is in international format (e.g. +91...)');
+      if (err.code === 'auth/invalid-phone-number') {
+        setError('This phone number format is not supported. Use +[country code] [number] (e.g., +91 98765 43210)');
+      } else if (err.code === 'auth/quota-exceeded') {
+        setError('SMS quota exceeded. Please try again later or use email verification.');
+      } else {
+        setError('Unable to send verification code. Please check your number and try again.');
+      }
       if ((window as any).recaptchaVerifier) {
         (window as any).recaptchaVerifier.clear();
         (window as any).recaptchaVerifier = null;
@@ -164,6 +178,13 @@ export default function VerificationGate({
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otp || !confirmationResult) return;
+
+    // Validate OTP format
+    if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+      setError('Please enter the complete 6-digit code.');
+      return;
+    }
+
     setChecking(true);
     setError('');
     try {
@@ -172,7 +193,13 @@ export default function VerificationGate({
       setStep('complete');
       setTimeout(onVerifyComplete, 1200);
     } catch (err: any) {
-      setError(err.message || 'Invalid OTP. Please try again.');
+      if (err.code === 'auth/invalid-verification-code') {
+        setError('This code is incorrect. Please check and try again.');
+      } else if (err.code === 'auth/code-expired') {
+        setError('This code has expired. Please request a new one.');
+      } else {
+        setError('Unable to verify code. Please try again.');
+      }
     } finally {
       setChecking(false);
     }
@@ -181,7 +208,7 @@ export default function VerificationGate({
   if (isExistingUser) {
     return (
       <div className="fixed inset-0 bg-black/30 z-40 flex items-end sm:items-center justify-center p-4">
-        <div id="recaptcha-container"></div>
+        <div id="verification-recaptcha-container"></div>
         <div className="bg-white w-full sm:max-w-md sm:rounded-2xl shadow-2xl p-6 sm:p-8 animate-slide-up">
           <div className="flex items-start gap-4 mb-6">
             <div className="bg-amber-100 p-3 rounded-2xl shrink-0">
@@ -224,14 +251,17 @@ export default function VerificationGate({
 
             {step === 'phone-input' && (
               <form onSubmit={handleSendOtp} className="space-y-3">
-                <input
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:border-orange-500 outline-none transition-all font-bold"
-                  required
-                />
+                <div>
+                  <input
+                    type="tel"
+                    placeholder="+91 98765 43210 (India)"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:border-orange-500 outline-none transition-all font-bold"
+                    required
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Enter your mobile number with country code</p>
+                </div>
                 <button
                   type="submit"
                   disabled={loading}
@@ -339,14 +369,17 @@ export default function VerificationGate({
                      </button>
                      <span className="font-bold text-gray-600">Enter Phone Number</span>
                    </div>
-                   <input
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold text-lg"
-                    required
-                  />
+                   <div>
+                    <input
+                      type="tel"
+                      placeholder="+91 98765 43210 (India)"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold text-lg"
+                      required
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Include country code for your mobile number</p>
+                  </div>
                   <button
                     type="submit"
                     disabled={loading}
