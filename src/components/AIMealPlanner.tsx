@@ -64,8 +64,11 @@ export default function AIMealPlanner({ onApprove, startDate, householdId, curre
     setError(null);
     try {
       const startDateStr = format(startDate, 'yyyy-MM-dd');
-      const pastMeals = await getPastMeals(householdId, startDate, 30);
-      const favorites = await getFavorites(householdId);
+      // Fetch past meals and favorites in parallel to save time
+      const [pastMeals, favorites] = await Promise.all([
+        getPastMeals(householdId, startDate, 30),
+        getFavorites(householdId)
+      ]);
 
       // Convert currentMealPlan to Draft format so AI can see it
       let existingDraft: AIMealDraft[] | undefined = undefined;
@@ -100,8 +103,11 @@ export default function AIMealPlanner({ onApprove, startDate, householdId, curre
     setError(null);
     try {
       const startDateStr = format(startDate, 'yyyy-MM-dd');
-      const pastMeals = await getPastMeals(householdId, startDate, 30);
-      const favorites = await getFavorites(householdId);
+      // Fetch past meals and favorites in parallel to save time
+      const [pastMeals, favorites] = await Promise.all([
+        getPastMeals(householdId, startDate, 30),
+        getFavorites(householdId)
+      ]);
       const updatedDrafts = await generateMealPlanDraft(tweakPrompt, startDateStr, userProfile, drafts, pastMeals, favorites);
       
       if (Array.isArray(updatedDrafts) && updatedDrafts.length > 0) {

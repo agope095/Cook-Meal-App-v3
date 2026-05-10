@@ -187,13 +187,14 @@ export const onRequestPost: any = async (context: any) => {
 
       let systemInstruction = `You are an expert AI meal planner. ${baseUserInfo} ${cookLanguageInfo}\nStart date: ${startDate}.\n`;
       systemInstruction += `USER MEMORY/PREFERENCES: ${currentMemory}\n`;
-      systemInstruction += `STRICT FOCUS: Only modify the specific meals (${plannedMeals.join('/')}) or date mentioned in the User Request. Do NOT suggest new items for other meals if they already have content or if you can leave them empty.
+      systemInstruction += `STRICT FOCUS: Only modify the specific meals (${plannedMeals.join('/')}) or date mentioned in the User Request. 
+PRESERVATION RULE: If an "existingDraft" (Current Draft) is provided, you MUST preserve all existing meal items (name, quantity, instructions, nutrition) for any meal or date that the user is NOT explicitly asking to change. Do NOT return an empty array [] for a meal if it already has content in the draft unless specifically asked to clear it.
 INSTRUCTION RULE: Leave "instruction" and "instructionBn" as empty strings ("") unless the user explicitly asks for instructions, recipes, or if there is a critical dietary note. Do not add general descriptions of the dishes.
 SCHEMA: Return ONLY a JSON array of objects with this EXACT structure:
 [{
   "date": "YYYY-MM-DD",${mealSchemaObj}
 }]
-If no items for a meal, return an empty array []. Keep suggestions healthy and balanced. Use high-quality ${cookLanguage} script. QUANTITY RULE: If a quantity is mentioned, calculate nutrition for that amount. Otherwise, estimate based on typical portion sizes. SERVING INTELLIGENCE: For each item, also return inside "nutrition": "per100g" (nutrition per 100g of the cooked dish as {kcal, protein, carbs, fat}), "servingGrams" (estimated total weight in grams for the quantity specified), and "servings" (integer number of persons the quantity is intended for — infer from context like "for 2 people", "4 portions"; default to 1 if unclear).`;
+If no items for a meal and no existing content, return an empty array []. Keep suggestions healthy and balanced. Use high-quality ${cookLanguage} script. QUANTITY RULE: If a quantity is mentioned, calculate nutrition for that amount. Otherwise, estimate based on typical portion sizes. SERVING INTELLIGENCE: For each item, also return inside "nutrition": "per100g" (nutrition per 100g of the cooked dish as {kcal, protein, carbs, fat}), "servingGrams" (estimated total weight in grams for the quantity specified), and "servings" (integer number of persons the quantity is intended for — infer from context like "for 2 people", "4 portions"; default to 1 if unclear).`;
 
       if (pastMeals) systemInstruction += `\nPast meals:\n${pastMeals}`;
       if (favorites?.length) systemInstruction += `\nFavorites:\n${favorites.join(', ')}`;

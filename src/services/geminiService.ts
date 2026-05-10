@@ -34,21 +34,30 @@ export interface AIMealDraft {
   dinner?: AIMealItemDraft[];
 }
 
+// Simple session cache to prevent redundant Firestore lookups
+const memoryCache: Record<string, string> = {};
+
 async function callAI<T>(payload: Record<string, unknown>, userProfile?: { name?: string, city?: string, cookLanguage?: string }): Promise<T> {
   const token = await auth.currentUser?.getIdToken();
   
-  // Fetch memory from Firestore
+  // Fetch memory from Firestore with caching
   let culinaryMemory = '';
   if (auth.currentUser) {
-    try {
-      const { doc, getDoc } = await import('firebase/firestore');
-      const { db } = await import('../firebase');
-      const snap = await getDoc(doc(db, 'owners', auth.currentUser.uid));
-      if (snap.exists()) {
-        culinaryMemory = snap.data().culinaryMemory || '';
+    const uid = auth.currentUser.uid;
+    if (memoryCache[uid]) {
+      culinaryMemory = memoryCache[uid];
+    } else {
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        const snap = await getDoc(doc(db, 'owners', uid));
+        if (snap.exists()) {
+          culinaryMemory = snap.data().culinaryMemory || '';
+          memoryCache[uid] = culinaryMemory;
+        }
+      } catch (e) {
+        console.warn("Memory fetch failed", e);
       }
-    } catch (e) {
-      console.warn("Memory fetch failed", e);
     }
   }
 
@@ -152,15 +161,21 @@ export async function chatWithCulinaryAssistant(
 
   let culinaryMemory = '';
   if (auth.currentUser) {
-    try {
-      const { doc, getDoc } = await import('firebase/firestore');
-      const { db } = await import('../firebase');
-      const snap = await getDoc(doc(db, 'owners', auth.currentUser.uid));
-      if (snap.exists()) {
-        culinaryMemory = snap.data().culinaryMemory || '';
+    const uid = auth.currentUser.uid;
+    if (memoryCache[uid]) {
+      culinaryMemory = memoryCache[uid];
+    } else {
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        const snap = await getDoc(doc(db, 'owners', uid));
+        if (snap.exists()) {
+          culinaryMemory = snap.data().culinaryMemory || '';
+          memoryCache[uid] = culinaryMemory;
+        }
+      } catch (e) {
+        console.warn("Memory fetch failed", e);
       }
-    } catch (e) {
-      console.warn("Memory fetch failed", e);
     }
   }
 
