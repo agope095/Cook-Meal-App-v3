@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc, arrayUnion, updateDoc, deleteDoc, arrayRemove, onS
 import { useSearchParams, Link } from 'react-router-dom';
 import CookView from './components/CookView';
 import VerificationGate from './components/VerificationGate';
+import ConfirmationModal from './components/ConfirmationModal';
 import { Home, PlusCircle, LogOut, ChevronRight, MapPin, Building2, User as UserIcon, Mail, Lock, Sparkles, ChefHat, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -17,7 +18,7 @@ interface HouseholdMapping {
 
 export default function CookApp() {
   const [user, setUser] = useState<User | null>(null);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<{name?: string; email?: string; ownerIds?: string[]; verified?: boolean} | null>(null);
   const [households, setHouseholds] = useState<HouseholdMapping[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -32,6 +33,8 @@ export default function CookApp() {
   const [isAddingNew, setIsAddingNew] = useState(!!searchParams.get('invite'));
   const [needsVerification, setNeedsVerification] = useState(false);
   const [isExistingCook, setIsExistingCook] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [kitchenToLeave, setKitchenToLeave] = useState<string | null>(null);
 
   // Auth form states
   const [email, setEmail] = useState('');
@@ -188,26 +191,33 @@ export default function CookApp() {
 
   const handleLeaveKitchen = async (ownerId: string) => {
     if (!user) return;
-    if (!window.confirm("Are you sure you want to leave this kitchen? You will no longer have access to their menu.")) return;
-    
+    setKitchenToLeave(ownerId);
+    setShowLeaveModal(true);
+  };
+
+  const confirmLeaveKitchen = async () => {
+    if (!user || !kitchenToLeave) return;
+
     try {
       setLoading(true);
       const cookRef = doc(db, 'cooks', user.uid);
       await updateDoc(cookRef, {
-        ownerIds: arrayRemove(ownerId),
+        ownerIds: arrayRemove(kitchenToLeave),
         updatedAt: new Date().toISOString()
       });
-      
-      if (activeOwnerId === ownerId) {
+
+      if (activeOwnerId === kitchenToLeave) {
         setActiveOwnerId(null);
       }
-      
-      setHouseholds(prev => prev.filter(h => h.ownerId !== ownerId));
+
+      setHouseholds(prev => prev.filter(h => h.ownerId !== kitchenToLeave));
     } catch (err: any) {
       console.error("Failed to leave kitchen:", err);
       setError(err.message || 'Failed to leave kitchen.');
     } finally {
       setLoading(false);
+      setShowLeaveModal(false);
+      setKitchenToLeave(null);
     }
   };
 
@@ -251,7 +261,7 @@ export default function CookApp() {
       } catch (e) {}
     }
     try {
-      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'cookapp-recaptcha-container', {
         'size': 'invisible',
       });
     } catch (err) {
@@ -402,7 +412,7 @@ export default function CookApp() {
             <p className="text-[var(--charcoal-soft)] font-medium opacity-60">Join a kitchen to start your shift</p>
           </div>
 
-          <div id="recaptcha-container"></div>
+          <div id="cookapp-recaptcha-container"></div>
           
           {authMode === 'phone' ? (
             <div className="space-y-6 relative z-10">
@@ -431,16 +441,25 @@ export default function CookApp() {
                 </form>
               ) : (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">Enter OTP</label>
-                  <input
-                    type="text"
-                    required
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    className="w-full px-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-black text-2xl text-center tracking-[0.5em] shadow-inner"
-                    placeholder="000000"
-                    maxLength={6}
-                  />
+                  <div>
+                    <label htmlFor="otp-input" className="block text-[10px] font-black uppercase tracking-widest text-[var(--charcoal-soft)] mb-2 ml-1 opacity-50">
+                      Enter 6-digit verification code
+                    </label>
+                    <input
+                      id="otp-input"
+                      type="text"
+                      required
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      className="w-full px-4 py-4 bg-[var(--cream)]/50 border-2 border-transparent rounded-2xl focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-black text-2xl text-center tracking-[0.5em] shadow-inner"
+                      placeholder="000000"
+                      maxLength={6}
+                      aria-describedby="otp-help"
+                    />
+                    <div id="otp-help" className="text-xs text-[var(--warm-gray)] mt-1">
+                      Enter the 6-digit code sent to your phone number
+                    </div>
+                  </div>
                   {error && <p className="text-[var(--terracotta)] text-xs font-bold px-1">{error}</p>}
                   <button
                     type="submit"
@@ -617,149 +636,171 @@ export default function CookApp() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--cream)] paper-grain p-6 flex flex-col items-center">
-      <div className="max-w-md w-full mt-12 text-center">
-        <motion.div 
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="bg-[var(--terracotta)] w-24 h-24 rounded-[32px] flex items-center justify-center text-white mx-auto mb-8 shadow-2xl rotate-3"
-        >
-          <UserIcon size={48} strokeWidth={2.5} />
-        </motion.div>
-        
-        <motion.h1 
-          initial={{ y: 10, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="text-4xl font-[var(--font-display)] font-bold text-[var(--charcoal)] mb-3 tracking-tight"
-        >
-          Hi, {userProfile?.name?.split(' ')[0] || 'Chef'}!
-        </motion.h1>
-        <motion.p 
-          initial={{ y: 10, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="text-[var(--charcoal-soft)] font-medium mb-12 opacity-60"
-        >
-          Select a kitchen to start your shift
-        </motion.p>
-
-        {households.length > 0 && !isAddingNew ? (
-          <div className="space-y-4 text-left">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--charcoal-soft)] ml-4 mb-4 opacity-40">Connected Kitchens</h2>
-            <div className="stagger">
-              {households.map((h, idx) => (
-                <motion.div 
-                  key={h.ownerId} 
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 * idx }}
-                  className="relative group mb-4"
-                >
-                  <button
-                    onClick={() => setActiveOwnerId(h.ownerId)}
-                    className="w-full bg-white p-6 rounded-[32px] border border-transparent hover:border-[var(--terracotta)]/30 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(184,80,59,0.1)] transition-all flex items-center justify-between group-hover:pr-20"
-                  >
-                    <div className="flex items-center gap-5">
-                      <div className="bg-[var(--cream)] p-4 rounded-2xl text-[var(--terracotta)] group-hover:bg-[var(--terracotta)] group-hover:text-white transition-all shadow-inner">
-                        <Building2 size={24} strokeWidth={2.5} />
-                      </div>
-                      <div>
-                        <p className="font-[var(--font-display)] font-bold text-[var(--charcoal)] text-xl text-left tracking-tight">{h.society}</p>
-                        <p className="text-[10px] font-black text-[var(--charcoal-soft)] uppercase tracking-widest opacity-40 text-left mt-1">
-                          {h.tower} • {h.flat}
-                        </p>
-                      </div>
-                    </div>
-                    <ChevronRight className="text-gray-300 group-hover:text-[var(--terracotta)] group-hover:translate-x-1 transition-all" size={24} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleLeaveKitchen(h.ownerId);
-                    }}
-                    className="absolute right-6 top-1/2 -translate-y-1/2 p-3 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100"
-                    title="Leave Kitchen"
-                  >
-                    <LogOut size={22} />
-                  </button>
-                </motion.div>
-              ))}
-            </div>
-            
-            <motion.button
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              onClick={() => setIsAddingNew(true)}
-              className="w-full mt-8 flex items-center justify-center gap-3 p-6 border-2 border-dashed border-[var(--cream-dark)] rounded-[32px] text-[var(--charcoal-soft)] opacity-50 hover:opacity-100 hover:text-[var(--terracotta)] hover:border-[var(--terracotta)]/30 transition-all font-bold group"
-            >
-              <PlusCircle size={22} className="group-hover:rotate-90 transition-transform duration-500" />
-              <span className="text-sm font-black uppercase tracking-widest">Connect Another Kitchen</span>
-            </motion.button>
-          </div>
-        ) : (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white p-10 rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-[var(--cream-dark)] w-full text-left relative overflow-hidden"
+    <>
+      <div className="min-h-screen bg-[var(--cream)] paper-grain p-6 flex flex-col items-center">
+        <div className="max-w-md w-full mt-12 text-center">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-[var(--terracotta)] w-24 h-24 rounded-[32px] flex items-center justify-center text-white mx-auto mb-8 shadow-2xl rotate-3"
           >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--terracotta)]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            
-            <h2 className="text-2xl font-[var(--font-display)] font-bold text-[var(--charcoal)] mb-2 tracking-tight relative z-10">Connect Kitchen</h2>
-            <p className="text-[10px] font-black text-[var(--charcoal-soft)] mb-10 uppercase tracking-widest opacity-40 relative z-10">Enter the code from the owner app</p>
-            
-            <form onSubmit={handleManualConnect} className="space-y-6 relative z-10">
-              <div>
-                <div className="relative group">
-                  <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={24} />
-                  <input
-                    type="text"
-                    required
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value)}
-                    className="w-full pl-14 pr-6 py-5 bg-[var(--cream)]/50 border-2 border-transparent rounded-[24px] focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] text-xl placeholder:text-gray-300 shadow-inner"
-                    placeholder="6-character code"
-                  />
-                </div>
-                {error && <p className="mt-3 text-[var(--terracotta)] text-xs font-bold px-5">{error}</p>}
+            <UserIcon size={48} strokeWidth={2.5} />
+          </motion.div>
+
+          <motion.h1
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="text-4xl font-[var(--font-display)] font-bold text-[var(--charcoal)] mb-3 tracking-tight"
+          >
+            Hi, {userProfile?.name?.split(' ')[0] || 'Chef'}!
+          </motion.h1>
+          <motion.p
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="text-[var(--charcoal-soft)] font-medium mb-12 opacity-60"
+          >
+            Select a kitchen to start your shift
+          </motion.p>
+
+          {households.length > 0 && !isAddingNew ? (
+            <div className="space-y-4 text-left">
+              <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--charcoal-soft)] ml-4 mb-4 opacity-40">Connected Kitchens</h2>
+              <div className="stagger">
+                {households.map((h, idx) => (
+                  <motion.div
+                    key={h.ownerId}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 * idx }}
+                    className="relative group mb-4"
+                  >
+                    <button
+                      onClick={() => setActiveOwnerId(h.ownerId)}
+                      className="w-full bg-white p-6 rounded-[32px] border border-transparent hover:border-[var(--terracotta)]/30 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(184,80,59,0.1)] transition-all flex items-center justify-between group-hover:pr-20"
+                    >
+                      <div className="flex items-center gap-5">
+                        <div className="bg-[var(--cream)] p-4 rounded-2xl text-[var(--terracotta)] group-hover:bg-[var(--terracotta)] group-hover:text-white transition-all shadow-inner">
+                          <Building2 size={24} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                          <p className="font-[var(--font-display)] font-bold text-[var(--charcoal)] text-xl text-left tracking-tight">{h.society}</p>
+                          <p className="text-[10px] font-black text-[var(--charcoal-soft)] uppercase tracking-widest opacity-40 text-left mt-1">
+                            {h.tower} • {h.flat}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="text-gray-300 group-hover:text-[var(--terracotta)] group-hover:translate-x-1 transition-all" size={24} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleLeaveKitchen(h.ownerId);
+                      }}
+                      className="absolute right-6 top-1/2 -translate-y-1/2 p-3 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100"
+                      title="Leave Kitchen"
+                      aria-label={`Leave kitchen at ${h.society} ${h.tower} ${h.flat}`}
+                    >
+                      <LogOut size={22} />
+                    </button>
+                  </motion.div>
+                ))}
               </div>
 
-              <button
-                type="submit"
-                disabled={authLoading || !inviteCode.trim()}
-                className="w-full bg-[var(--terracotta)] text-white py-5 rounded-[24px] font-black text-lg hover:bg-[var(--terracotta-deep)] transition-all shadow-[0_12px_24px_rgba(184,80,59,0.2)] hover:shadow-[0_16px_32px_rgba(184,80,59,0.3)] disabled:opacity-50 flex items-center justify-center gap-3"
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                onClick={() => setIsAddingNew(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setIsAddingNew(true);
+                  }
+                }}
+                tabIndex={0}
+                className="w-full mt-8 flex items-center justify-center gap-3 p-6 border-2 border-dashed border-[var(--cream-dark)] rounded-[32px] text-[var(--charcoal-soft)] opacity-50 hover:opacity-100 hover:text-[var(--terracotta)] hover:border-[var(--terracotta)]/30 transition-all font-bold group focus:outline-none focus:ring-2 focus:ring-[var(--terracotta)]"
+                aria-label="Connect another kitchen"
               >
-                {authLoading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="h-5 w-5 border-2 border-white border-t-transparent rounded-full" /> : (
-                  <>
-                    <Sparkles size={20} />
-                    <span>Connect & Open Menu</span>
-                  </>
-                )}
-              </button>
-              
-              <div className="flex flex-col gap-4 mt-6">
-                {households.length > 0 && (
+                <PlusCircle size={22} className="group-hover:rotate-90 transition-transform duration-500" />
+                <span className="text-sm font-black uppercase tracking-widest">Connect Another Kitchen</span>
+              </motion.button>
+            </div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white p-10 rounded-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-[var(--cream-dark)] w-full text-left relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--terracotta)]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+
+              <h2 className="text-2xl font-[var(--font-display)] font-bold text-[var(--charcoal)] mb-2 tracking-tight relative z-10">Connect Kitchen</h2>
+              <p className="text-[10px] font-black text-[var(--charcoal-soft)] mb-10 uppercase tracking-widest opacity-40 relative z-10">Enter the code from the owner app</p>
+
+              <form onSubmit={handleManualConnect} className="space-y-6 relative z-10">
+                <div>
+                  <div className="relative group">
+                    <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-[var(--terracotta)] opacity-40 group-focus-within:opacity-100 transition-opacity" size={24} />
+                    <input
+                      type="text"
+                      required
+                      value={inviteCode}
+                      onChange={(e) => setInviteCode(e.target.value)}
+                      className="w-full pl-14 pr-6 py-5 bg-[var(--cream)]/50 border-2 border-transparent rounded-[24px] focus:border-[var(--terracotta)]/30 focus:bg-white outline-none transition-all font-bold text-[var(--charcoal)] text-xl placeholder:text-gray-300 shadow-inner"
+                      placeholder="6-character code"
+                    />
+                  </div>
+                  {error && <p className="mt-3 text-[var(--terracotta)] text-xs font-bold px-5">{error}</p>}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={authLoading || !inviteCode.trim()}
+                  className="w-full bg-[var(--terracotta)] text-white py-5 rounded-[24px] font-black text-lg hover:bg-[var(--terracotta-deep)] transition-all shadow-[0_12px_24px_rgba(184,80,59,0.2)] hover:shadow-[0_16px_32px_rgba(184,80,59,0.3)] disabled:opacity-50 flex items-center justify-center gap-3"
+                >
+                  {authLoading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="h-5 w-5 border-2 border-white border-t-transparent rounded-full" /> : (
+                    <>
+                      <Sparkles size={20} />
+                      <span>Connect & Open Menu</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="flex flex-col gap-4 mt-6">
+                  {households.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNew(false)}
+                      className="w-full text-center text-[var(--charcoal-soft)] opacity-40 hover:opacity-100 font-black text-[10px] uppercase tracking-widest transition-opacity"
+                    >
+                      Back to kitchen list
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setIsAddingNew(false)}
-                    className="w-full text-center text-[var(--charcoal-soft)] opacity-40 hover:opacity-100 font-black text-[10px] uppercase tracking-widest transition-opacity"
+                    onClick={() => logout()}
+                    className="w-full text-center text-red-300 hover:text-red-500 font-black text-[10px] uppercase tracking-widest transition-colors"
                   >
-                    Back to kitchen list
+                    Sign Out
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => logout()}
-                  className="w-full text-center text-red-300 hover:text-red-500 font-black text-[10px] uppercase tracking-widest transition-colors"
-                >
-                  Sign Out
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        )}
+                </div>
+              </form>
+            </motion.div>
+          )}
+        </div>
       </div>
-    </div>
+
+      <ConfirmationModal
+        isOpen={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        onConfirm={confirmLeaveKitchen}
+        title="Leave Kitchen"
+        message="Are you sure you want to leave this kitchen? You will no longer have access to their menu."
+        confirmText="Leave Kitchen"
+        cancelText="Cancel"
+        variant="danger"
+      />
+    </>
   );
 }

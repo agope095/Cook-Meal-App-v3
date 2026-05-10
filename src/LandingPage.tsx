@@ -32,26 +32,32 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[var(--cream)] font-sans paper-grain relative selection:bg-[var(--terracotta)] selection:text-white">
       {/* Navigation */}
-      <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${scrollY > 50 ? 'bg-[var(--cream)]/90 backdrop-blur-md border-b border-[var(--cream-dark)] py-3 shadow-sm' : 'bg-transparent py-5'}`}>
+      <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${scrollY > 50 ? 'bg-[var(--cream)]/90 backdrop-blur-md border-b border-[var(--cream-dark)] py-3 shadow-sm' : 'bg-transparent py-5'}`} role="navigation" aria-label="Main navigation">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-[var(--terracotta)] text-[var(--paper)] p-2 rounded-xl shadow-sm animate-float-slow">
+            <div className="bg-[var(--terracotta)] text-[var(--paper)] p-2 rounded-xl shadow-sm animate-float-slow" aria-hidden="true">
               <Utensils size={24} strokeWidth={2.5} />
             </div>
-            <span className="text-2xl font-[var(--font-display)] font-bold text-[var(--charcoal)] tracking-tight">SousChefAI</span>
+            <h1 className="text-2xl font-[var(--font-display)] font-bold text-[var(--charcoal)] tracking-tight">
+              <a href="/" className="hover:text-[var(--terracotta)] focus:outline-none focus:ring-2 focus:ring-[var(--terracotta)] rounded">
+                SousChefAI
+              </a>
+            </h1>
           </div>
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/owner')}
-              className="bg-[var(--charcoal)] text-[var(--paper)] px-6 py-2.5 rounded-full font-bold text-sm hover:bg-[var(--charcoal-soft)] transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
+              className="bg-[var(--charcoal)] text-[var(--paper)] px-6 py-2.5 rounded-full font-bold text-sm hover:bg-[var(--charcoal-soft)] transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[var(--paper)]"
+              aria-label="Access owner portal"
             >
-              Owner Portal
+              Join Now
             </button>
             <button
               onClick={() => navigate('/cook')}
-              className="hidden md:block bg-white text-[var(--charcoal)] border border-[var(--cream-dark)] px-6 py-2.5 rounded-full font-bold text-sm hover:bg-gray-50 transition-all shadow-sm"
+              className="hidden md:block bg-white text-[var(--charcoal)] border border-[var(--cream-dark)] px-6 py-2.5 rounded-full font-bold text-sm hover:bg-gray-50 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--terracotta)]"
+              aria-label="Access your kitchen"
             >
-              Cook Login
+              Access Your Kitchen
             </button>
           </div>
         </div>
@@ -91,7 +97,7 @@ export default function LandingPage() {
                   onClick={() => navigate('/owner')}
                   className="w-full sm:w-auto flex items-center justify-center gap-2 px-10 py-5 bg-[var(--terracotta)] text-white rounded-full font-bold text-lg hover:bg-[var(--terracotta-deep)] transition-all shadow-[0_20px_50px_rgba(184,80,59,0.3)] hover:shadow-[0_25px_60px_rgba(184,80,59,0.4)] hover:-translate-y-1 group"
                 >
-                  Get Started Free
+                  Start Planning Meals
                   <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
                 </button>
                 <button
@@ -103,10 +109,14 @@ export default function LandingPage() {
               </div>
 
               <div className="mt-12 flex items-center justify-center lg:justify-start gap-8">
-                <div className="flex -space-x-3">
-                  {[1,2,3,4].map(i => (
-                    <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-gray-200 overflow-hidden shadow-sm">
-                      <img src={`https://i.pravatar.cc/100?img=${i+10}`} alt="User" />
+                <div className="flex -space-x-3" aria-label="Trusted users testimonials">
+                  {[1,2,3,4].map((i, index) => (
+                    <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-gray-200 overflow-hidden shadow-sm" title={`Testimonial from user ${index + 1}`}>
+                      <img
+                        src={`https://i.pravatar.cc/100?img=${i+10}`}
+                        alt={`Testimonial contributor ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                   ))}
                 </div>

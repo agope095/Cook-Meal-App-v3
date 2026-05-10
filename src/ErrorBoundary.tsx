@@ -26,11 +26,14 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       let errorMessage = this.state.error?.message || 'An unexpected error occurred.';
-      
+
       try {
-        const parsedError = JSON.parse(errorMessage);
-        if (parsedError.error) {
-          errorMessage = `Firestore Error: ${parsedError.error} (Operation: ${parsedError.operationType}, Path: ${parsedError.path})`;
+        // Only try to parse if it looks like JSON
+        if (errorMessage.trim().startsWith('{') && errorMessage.trim().endsWith('}')) {
+          const parsedError = JSON.parse(errorMessage);
+          if (parsedError.error) {
+            errorMessage = `Firestore Error: ${parsedError.error} (Operation: ${parsedError.operationType || 'unknown'}, Path: ${parsedError.path || 'unknown'})`;
+          }
         }
       } catch (e) {
         // Not a JSON error, use the original message
