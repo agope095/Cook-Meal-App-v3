@@ -809,7 +809,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-[var(--cream-dark)]/30 p-1.5 rounded-[24px]">
+            <div className="flex items-center gap-1.5 bg-[var(--cream-dark)]/30 p-1.5 rounded-[24px] flex-wrap justify-center">
               {(['monthly', 'weekly', 'daily'] as const).map((mode) => (
                 <button
                   key={mode}
@@ -827,7 +827,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
 
             <div className="hidden md:flex h-8 w-px bg-gray-100 mx-2" />
 
-            <div className="flex items-center gap-2 pr-2">
+            <div className="flex items-center gap-2 pr-2 flex-wrap justify-center pb-2 md:pb-0">
               <div className="flex items-center bg-white border border-gray-100 rounded-2xl shadow-sm p-1">
                 <button
                   onClick={() => {
@@ -1111,7 +1111,10 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       </div>
       <AnimatePresence>
         {selectedMealForNutrition && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1282,7 +1285,10 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
 
       <AnimatePresence>
         {showGroceryModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

@@ -161,7 +161,7 @@ export default function AIMealPlanner({ onApprove, startDate, householdId, curre
 
   if (!drafts || drafts.length === 0) {
     return (
-      <div className="bg-white/40 backdrop-blur-xl border-2 border-white rounded-[40px] p-8 md:p-12 shadow-2xl relative overflow-hidden">
+      <div className="bg-white/40 backdrop-blur-xl border-2 border-white rounded-[40px] p-5 md:p-12 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-100/50 rounded-full blur-[100px] -mr-32 -mt-32" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-100/30 rounded-full blur-[100px] -ml-32 -mb-32" />
 
@@ -222,7 +222,7 @@ export default function AIMealPlanner({ onApprove, startDate, householdId, curre
 
   return (
     <div className="space-y-10 pb-20">
-      <div className="bg-white/40 backdrop-blur-xl border-2 border-white rounded-[40px] p-6 md:p-10 shadow-2xl">
+      <div className="bg-white/40 backdrop-blur-xl border-2 border-white rounded-[40px] p-4 md:p-10 shadow-2xl">
         <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -265,7 +265,7 @@ export default function AIMealPlanner({ onApprove, startDate, householdId, curre
                 </div>
               </div>
               
-              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                 {((userProfile as any).plannedMeals || ['lunch', 'dinner']).map((mealType: string) => {
                   const items = (day as any)[mealType] || [];
                   return (
@@ -279,7 +279,7 @@ export default function AIMealPlanner({ onApprove, startDate, householdId, curre
                     ) : (
                       <div className="space-y-4">
                         {items.map((item: AIMealItemDraft, itemIndex: number) => (
-                          <div key={itemIndex} className="bg-white p-5 rounded-2xl border border-gray-50 shadow-sm space-y-4 hover:shadow-md transition-all group">
+                          <div key={itemIndex} className="bg-white p-4 md:p-5 rounded-2xl border border-gray-50 shadow-sm space-y-4 hover:shadow-md transition-all group">
                             <div className="flex flex-col gap-3">
                               <div className="flex items-center justify-between">
                                 <div className="flex flex-col">

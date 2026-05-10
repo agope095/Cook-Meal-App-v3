@@ -376,7 +376,10 @@ export default function OwnerApp() {
               </Routes>
 
               {/* Bottom Navigation for Mobile / Fixed Navigation for Desktop */}
-              <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--charcoal)]/90 backdrop-blur-xl border border-white/10 px-3 py-3 rounded-[32px] shadow-2xl z-50 flex items-center gap-2">
+              <nav
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--charcoal)]/90 backdrop-blur-xl border border-white/10 px-3 py-3 rounded-[32px] shadow-2xl z-50 flex items-center gap-2"
+                style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+              >
                 {[
                   { to: '/owner', icon: Calendar, label: 'Planner' },
                   { to: '/owner/cooks', icon: Users, label: 'Cooks' },

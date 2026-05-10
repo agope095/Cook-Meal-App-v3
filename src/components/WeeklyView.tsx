@@ -74,7 +74,7 @@ export default function WeeklyView({ startDate, data, onDateSelect }: WeeklyView
               </span>
             </div>
 
-            <div className="flex-1 flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 flex flex-col md:flex-row gap-4">
               {renderMealCell(plan?.lunch, 'lunch', date)}
               {renderMealCell(plan?.dinner, 'dinner', date)}
             </div>

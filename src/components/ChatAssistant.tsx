@@ -98,6 +98,11 @@ export default function ChatAssistant({ householdId }: ChatAssistantProps) {
     ? "fixed inset-4 sm:inset-10 bg-white/60 backdrop-blur-3xl rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.15)] border border-white flex flex-col z-50 overflow-hidden transition-all duration-500 ease-out"
     : "fixed bottom-0 right-0 left-0 top-0 sm:bottom-28 sm:right-10 sm:left-auto sm:top-auto sm:w-[400px] sm:h-[650px] sm:max-h-[85vh] bg-white/60 backdrop-blur-3xl sm:rounded-[32px] shadow-[0_32px_120px_rgba(0,0,0,0.15)] border border-white flex flex-col z-50 overflow-hidden transition-all duration-500 ease-out";
 
+  const safeAreaStyle = {
+    paddingTop: 'env(safe-area-inset-top)',
+    paddingBottom: 'env(safe-area-inset-bottom)'
+  };
+
   return (
     <>
       {/* Floating Action Button */}
@@ -126,6 +131,7 @@ export default function ChatAssistant({ householdId }: ChatAssistantProps) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className={windowClass}
+            style={safeAreaStyle}
           >
             {/* Header */}
             <div className="bg-[var(--charcoal)] p-6 text-white flex justify-between items-center relative overflow-hidden">
