@@ -1,6 +1,3 @@
-<div align="center">
-<img width="1200" height="475" alt="SousChefAI Banner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-
 # 🍳 SousChefAI
 ### Cooking *together*, every single day.
 
@@ -8,8 +5,6 @@
 [![Framework: Vite](https://img.shields.io/badge/Framework-Vite-646CFF?style=flat&logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Backend: Firebase](https://img.shields.io/badge/Backend-Firebase-FFCA28?style=flat&logo=firebase&logoColor=white)](https://firebase.google.com/)
 [![AI: Google Gemini](https://img.shields.io/badge/AI-Google_Gemini-8E75B2?style=flat&logo=google&logoColor=white)](https://ai.google.dev/)
-
-</div>
 
 ---
 
