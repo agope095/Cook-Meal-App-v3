@@ -27,6 +27,7 @@ export default function OwnerApp() {
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [isExistingUser, setIsExistingUser] = useState(false);
   const location = useLocation();
