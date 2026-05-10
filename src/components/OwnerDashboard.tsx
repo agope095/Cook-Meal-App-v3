@@ -381,7 +381,14 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
           id: generateSecureId(),
           name: i.name,
           quantity: i.quantity || '',
+          bengaliQuantity: i.quantityBn || '',
+          hindiQuantity: i.quantityBn || '', // Fallback depending on language setting
           instruction: i.instruction || '',
+          bengaliInstruction: i.instructionBn || '',
+          hindiInstruction: i.instructionBn || '',
+          bengaliName: i.nameBn || '',
+          hindiName: i.nameBn || '',
+          nutrition: i.nutrition,
         }));
 
         const combinedItems = [...existingItems, ...newItems];

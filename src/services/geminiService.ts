@@ -123,7 +123,20 @@ export interface ChatResponse {
   addToPlan?: {
     date: string;
     meal: 'breakfast' | 'lunch' | 'snacks' | 'dinner';
-    items: { name: string; quantity: string; instruction: string }[];
+    items: {
+      name: string;
+      nameBn?: string;
+      quantity: string;
+      quantityBn?: string;
+      instruction: string;
+      instructionBn?: string;
+      nutrition?: {
+        kcal: number;
+        protein: number;
+        carbs: number;
+        fat: number;
+      }
+    }[];
   };
 }
 

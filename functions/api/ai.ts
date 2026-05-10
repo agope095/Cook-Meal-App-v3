@@ -221,7 +221,7 @@ If no items for a meal, return an empty array []. Keep suggestions healthy and b
       systemInstruction += `CONVERSATION STYLE: Be warm and helpful. Keep responses to 2-4 sentences. Feel free to ask a follow-up question to keep the conversation going.\n`;
       systemInstruction += `MEMORY UPDATE: If the user mentions a preference, allergy, or habit, return your response inside a JSON object like this: {"reply": "...", "updateMemory": "user likes spicy food"}.
 MEAL ADDITION RULE: If the user explicitly asks to add a brainstormed recipe to their meal plan, YOU MUST FIRST confirm the number of people and the exact meal (e.g., 'lunch' or 'dinner' on a specific day). Once confirmed, return a JSON object with this exact structure:
-{"reply": "...", "addToPlan": {"date": "YYYY-MM-DD", "meal": "lunch", "items": [{"name": "string", "quantity": "string", "instruction": "string"}]}}
+{"reply": "...", "addToPlan": {"date": "YYYY-MM-DD", "meal": "lunch", "items": [{"name": "string", "nameBn": "${cookLanguage} translation", "quantity": "string", "quantityBn": "${cookLanguage} translation", "instruction": "string", "instructionBn": "${cookLanguage} translation", "nutrition": { "kcal": number, "protein": number, "carbs": number, "fat": number }}]}}
 Otherwise, just return the text reply or the JSON with "reply" and "updateMemory".`;
       
       if (pastMeals) systemInstruction += `\nUser's Past meals:\n${pastMeals}`;
