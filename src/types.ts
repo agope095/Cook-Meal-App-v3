@@ -67,4 +67,5 @@ export interface OwnerProfile {
   authorizedUids?: string[];
   joinedHouseholdId?: string | null;
   viewPreference?: 'casual' | 'power';
+  plannedMeals?: ('breakfast' | 'lunch' | 'snacks' | 'dinner')[];
 }

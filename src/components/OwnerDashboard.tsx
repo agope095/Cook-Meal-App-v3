@@ -41,7 +41,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
   const [pendingSaveAfterAnomaly, setPendingSaveAfterAnomaly] = useState(false);
 
   const handleGenerateGroceries = async () => {
-    const allMeals = [...lunchItems, ...dinnerItems].filter(m => m.name.trim() !== '');
+    const allMeals = [...breakfastItems, ...lunchItems, ...snacksItems, ...dinnerItems].filter(m => m.name.trim() !== '');
     if (allMeals.length === 0) {
       alert("Please add some meals to generate a grocery list.");
       return;
@@ -103,7 +103,9 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
   };
 
   // Form state
+  const [breakfastItems, setBreakfastItems] = useState<MealItem[]>([]);
   const [lunchItems, setLunchItems] = useState<MealItem[]>([]);
+  const [snacksItems, setSnacksItems] = useState<MealItem[]>([]);
   const [dinnerItems, setDinnerItems] = useState<MealItem[]>([]);
 
   // Cleanup old records (older than 90 days) automatically when admin logs in
@@ -147,11 +149,15 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       if (docSnap.exists()) {
         const data = docSnap.data() as MealPlan;
         setMealPlan(data);
+        setBreakfastItems(data.breakfast || []);
         setLunchItems(data.lunch || []);
+        setSnacksItems(data.snacks || []);
         setDinnerItems(data.dinner || []);
       } else {
         setMealPlan(null);
+        setBreakfastItems([]);
         setLunchItems([]);
+        setSnacksItems([]);
         setDinnerItems([]);
       }
       setLoading(false);
@@ -228,7 +234,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
     // Anomaly check before saving — only run once per save attempt
     if (!skipAnomalyCheck) {
       const householdSize = userProfile?.householdSize ?? 2;
-      const allItems = [...lunchItems, ...dinnerItems];
+      const allItems = [...breakfastItems, ...lunchItems, ...snacksItems, ...dinnerItems];
       const anomaly = detectServingAnomaly(allItems, householdSize);
       if (anomaly) {
         setServingAnomaly(anomaly);
@@ -242,23 +248,42 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
     const docRef = doc(db, 'mealPlans', `${householdId}_${dateStr}`);
 
     try {
-      if (lunchItems.length === 0 && dinnerItems.length === 0) {
+      if (breakfastItems.length === 0 && lunchItems.length === 0 && snacksItems.length === 0 && dinnerItems.length === 0) {
         await deleteDoc(docRef);
       } else {
-        const [processedLunch, processedDinner] = await Promise.all([
-          processMealItems(householdId, lunchItems, userProfile),
-          processMealItems(householdId, dinnerItems, userProfile)
+        const plannedMeals = userProfile?.plannedMeals || ['lunch', 'dinner'];
+
+        // Process only selected meals
+        const processIfSelected = async (mealType: string, items: MealItem[]) => {
+          if (plannedMeals.includes(mealType)) {
+             return await processMealItems(householdId, items, userProfile);
+          }
+          return items;
+        };
+
+        const [processedBreakfast, processedLunch, processedSnacks, processedDinner] = await Promise.all([
+          processIfSelected('breakfast', breakfastItems),
+          processIfSelected('lunch', lunchItems),
+          processIfSelected('snacks', snacksItems),
+          processIfSelected('dinner', dinnerItems)
         ]);
 
-        await setDoc(docRef, {
+        const updateData: any = {
           date: dateStr,
-          lunch: processedLunch,
-          dinner: processedDinner,
           ownerId: householdId
-        });
+        };
+
+        if (plannedMeals.includes('breakfast')) updateData.breakfast = processedBreakfast;
+        if (plannedMeals.includes('lunch')) updateData.lunch = processedLunch;
+        if (plannedMeals.includes('snacks')) updateData.snacks = processedSnacks;
+        if (plannedMeals.includes('dinner')) updateData.dinner = processedDinner;
+
+        await setDoc(docRef, updateData, { merge: true });
         
         // Update local state with the processed items so we don't re-translate next save
+        setBreakfastItems(processedBreakfast);
         setLunchItems(processedLunch);
+        setSnacksItems(processedSnacks);
         setDinnerItems(processedDinner);
       }
       alert('Meal plan saved successfully!');
@@ -290,7 +315,8 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       const dateStr = draft.date;
       const docRef = doc(db, 'mealPlans', `${householdId}_${dateStr}`);
       
-      const convertToMealItems = (items: any[]): MealItem[] => {
+      const convertToMealItems = (items: any[] | undefined): MealItem[] => {
+        if (!items) return [];
         return items.map(item => ({
           id: generateSecureId(),
           name: item.name,
@@ -305,26 +331,94 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
         }));
       };
 
+      const plannedMeals = userProfile?.plannedMeals || ['lunch', 'dinner'];
       
-      const draftLunchItems = convertToMealItems(draft.lunch);
-      const draftDinnerItems = convertToMealItems(draft.dinner);
+      const updates: any = { date: dateStr, ownerId: householdId };
       
-      const [processedLunch, processedDinner] = await Promise.all([
-        processMealItems(householdId, draftLunchItems, userProfile),
-        processMealItems(householdId, draftDinnerItems, userProfile)
+      const processDraftMeal = async (mealType: 'breakfast' | 'lunch' | 'snacks' | 'dinner') => {
+        if (plannedMeals.includes(mealType) && draft[mealType]) {
+          const draftItems = convertToMealItems(draft[mealType]);
+          updates[mealType] = await processMealItems(householdId, draftItems, userProfile);
+        }
+      };
+
+      await Promise.all([
+        processDraftMeal('breakfast'),
+        processDraftMeal('lunch'),
+        processDraftMeal('snacks'),
+        processDraftMeal('dinner')
       ]);
       
-      batch.set(docRef, {
-        date: dateStr,
-        lunch: processedLunch,
-        dinner: processedDinner,
-        ownerId: householdId
-      }, { merge: true });
+      // Get existing to prevent overwriting un-planned meals
+      const existingSnap = await getDoc(docRef);
+      if (existingSnap.exists()) {
+         batch.set(docRef, { ...existingSnap.data(), ...updates }, { merge: true });
+      } else {
+         batch.set(docRef, updates, { merge: true });
+      }
     }
     
     await batch.commit();
     setActiveTab('manual');
   };
+
+  useEffect(() => {
+    const handleAIAddMealToPlan = async (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { date, meal, items } = customEvent.detail;
+      if (!householdId || !date || !meal || !items || items.length === 0) return;
+
+      const docRef = doc(db, 'mealPlans', `${householdId}_${date}`);
+      try {
+        const snap = await getDoc(docRef);
+        let existingItems: MealItem[] = [];
+        if (snap.exists()) {
+          const data = snap.data() as MealPlan;
+          existingItems = data[meal as 'breakfast'|'lunch'|'snacks'|'dinner'] || [];
+        }
+
+        const newItems = items.map((i: any) => ({
+          id: generateSecureId(),
+          name: i.name,
+          quantity: i.quantity || '',
+          bengaliQuantity: i.quantityBn || '',
+          hindiQuantity: i.quantityBn || '', // Fallback depending on language setting
+          instruction: i.instruction || '',
+          bengaliInstruction: i.instructionBn || '',
+          hindiInstruction: i.instructionBn || '',
+          bengaliName: i.nameBn || '',
+          hindiName: i.nameBn || '',
+          nutrition: i.nutrition,
+        }));
+
+        const combinedItems = [...existingItems, ...newItems];
+        const processed = await processMealItems(householdId, combinedItems, userProfile);
+
+        await setDoc(docRef, {
+          [meal]: processed,
+          date: date,
+          ownerId: householdId
+        }, { merge: true });
+
+        // Update local state if the currently viewed date matches the added date
+        if (date === format(selectedDate, 'yyyy-MM-dd')) {
+          if (meal === 'breakfast') setBreakfastItems(processed);
+          else if (meal === 'lunch') setLunchItems(processed);
+          else if (meal === 'snacks') setSnacksItems(processed);
+          else if (meal === 'dinner') setDinnerItems(processed);
+        }
+
+        // Show a brief success toast or alert
+        alert(`Successfully added ${items.length} item(s) to ${meal} on ${date}.`);
+
+      } catch (err) {
+        console.error("Error handling aiAddMealToPlan event:", err);
+      }
+    };
+
+    window.addEventListener('aiAddMealToPlan', handleAIAddMealToPlan);
+    return () => window.removeEventListener('aiAddMealToPlan', handleAIAddMealToPlan);
+  }, [householdId, userProfile]);
 
   const handleAddFromDiscovery = (item: Partial<MealItem>) => {
     const newItem: MealItem = {
@@ -337,10 +431,16 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       bengaliVideoUrl: item.bengaliVideoUrl || ''
     };
     
-    // Add to lunch by default, user can move it
-    setLunchItems([...lunchItems, newItem]);
+    const plannedMeals = userProfile?.plannedMeals || ['lunch', 'dinner'];
+    const defaultMeal = plannedMeals[0] || 'lunch';
+
+    if (defaultMeal === 'breakfast') setBreakfastItems([...breakfastItems, newItem]);
+    else if (defaultMeal === 'lunch') setLunchItems([...lunchItems, newItem]);
+    else if (defaultMeal === 'snacks') setSnacksItems([...snacksItems, newItem]);
+    else setDinnerItems([...dinnerItems, newItem]);
+
     setActiveTab('manual');
-    alert(`Added ${item.name} to lunch!`);
+    alert(`Added ${item.name} to ${defaultMeal}!`);
   };
 
   const handleCopyWeek = async () => {
@@ -365,8 +465,10 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
             date: targetDate,
             // Strip out IDs to avoid conflicts if needed, but since they are unique per item, it's fine.
             // However, we should generate new IDs to treat them as fresh entries.
-            lunch: sourcePlan.lunch.map(item => ({ ...item, id: generateSecureId() })),
-            dinner: sourcePlan.dinner.map(item => ({ ...item, id: generateSecureId() }))
+            breakfast: sourcePlan.breakfast?.map(item => ({ ...item, id: generateSecureId() })) || [],
+            lunch: sourcePlan.lunch?.map(item => ({ ...item, id: generateSecureId() })) || [],
+            snacks: sourcePlan.snacks?.map(item => ({ ...item, id: generateSecureId() })) || [],
+            dinner: sourcePlan.dinner?.map(item => ({ ...item, id: generateSecureId() })) || []
           });
         }
       }
@@ -381,7 +483,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
     }
   };
 
-  const addItem = (mealType: 'lunch' | 'dinner') => {
+  const addItem = (mealType: 'breakfast' | 'lunch' | 'snacks' | 'dinner') => {
     const newItem: MealItem = {
       id: generateSecureId(),
       name: '',
@@ -394,15 +496,14 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       bengaliVideoUrl: ''
     };
     
-    if (mealType === 'lunch') {
-      setLunchItems([...lunchItems, newItem]);
-    } else {
-      setDinnerItems([...dinnerItems, newItem]);
-    }
+    if (mealType === 'breakfast') setBreakfastItems([...breakfastItems, newItem]);
+    else if (mealType === 'lunch') setLunchItems([...lunchItems, newItem]);
+    else if (mealType === 'snacks') setSnacksItems([...snacksItems, newItem]);
+    else setDinnerItems([...dinnerItems, newItem]);
   };
 
-  const updateItem = (mealType: 'lunch' | 'dinner', id: string, field: keyof MealItem, value: any) => {
-    const items = mealType === 'lunch' ? lunchItems : dinnerItems;
+  const updateItem = (mealType: 'breakfast' | 'lunch' | 'snacks' | 'dinner', id: string, field: keyof MealItem, value: any) => {
+    const items = mealType === 'breakfast' ? breakfastItems : mealType === 'lunch' ? lunchItems : mealType === 'snacks' ? snacksItems : dinnerItems;
     const updatedItems = items.map(item => {
       if (item.id === id) {
         let updated = { ...item, [field]: value };
@@ -433,22 +534,20 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       return item;
     });
     
-    if (mealType === 'lunch') {
-      setLunchItems(updatedItems);
-    } else {
-      setDinnerItems(updatedItems);
-    }
+    if (mealType === 'breakfast') setBreakfastItems(updatedItems);
+    else if (mealType === 'lunch') setLunchItems(updatedItems);
+    else if (mealType === 'snacks') setSnacksItems(updatedItems);
+    else setDinnerItems(updatedItems);
   };
 
-  const removeItem = (mealType: 'lunch' | 'dinner', id: string) => {
-    if (mealType === 'lunch') {
-      setLunchItems(lunchItems.filter(item => item.id !== id));
-    } else {
-      setDinnerItems(dinnerItems.filter(item => item.id !== id));
-    }
+  const removeItem = (mealType: 'breakfast' | 'lunch' | 'snacks' | 'dinner', id: string) => {
+    if (mealType === 'breakfast') setBreakfastItems(breakfastItems.filter(item => item.id !== id));
+    else if (mealType === 'lunch') setLunchItems(lunchItems.filter(item => item.id !== id));
+    else if (mealType === 'snacks') setSnacksItems(snacksItems.filter(item => item.id !== id));
+    else setDinnerItems(dinnerItems.filter(item => item.id !== id));
   };
 
-  const handleManualTranslate = async (mealType: 'lunch' | 'dinner', item: MealItem) => {
+  const handleManualTranslate = async (mealType: 'breakfast' | 'lunch' | 'snacks' | 'dinner', item: MealItem) => {
     if (!item.name) return;
     
     // Set a temporary loading state for this specific item
@@ -460,14 +559,13 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       const processed = await processMealItems(householdId, [itemToProcess], userProfile);
       const result = processed[0];
       
-      const items = mealType === 'lunch' ? lunchItems : dinnerItems;
+      const items = mealType === 'breakfast' ? breakfastItems : mealType === 'lunch' ? lunchItems : mealType === 'snacks' ? snacksItems : dinnerItems;
       const updatedItems = items.map(i => i.id === item.id ? result : i);
       
-      if (mealType === 'lunch') {
-        setLunchItems(updatedItems);
-      } else {
-        setDinnerItems(updatedItems);
-      }
+      if (mealType === 'breakfast') setBreakfastItems(updatedItems);
+      else if (mealType === 'lunch') setLunchItems(updatedItems);
+      else if (mealType === 'snacks') setSnacksItems(updatedItems);
+      else setDinnerItems(updatedItems);
     } catch (error) {
       console.error("Manual translation failed:", error);
       updateItem(mealType, item.id, 'bengaliName', ''); // Clear the loading text on error
@@ -475,7 +573,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
     }
   };
 
-  const renderMealSection = (mealType: 'lunch' | 'dinner', items: MealItem[]) => (
+  const renderMealSection = (mealType: 'breakfast' | 'lunch' | 'snacks' | 'dinner', items: MealItem[]) => (
     <div className="bg-white/40 backdrop-blur-md p-4 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 mb-3 relative overflow-hidden group">
       {/* Background Accent */}
       <div className={`absolute -right-20 -top-20 w-64 h-64 rounded-full blur-3xl opacity-10 transition-colors ${mealType === 'lunch' ? 'bg-[var(--terracotta)]' : 'bg-[var(--sage)]'}`} />
@@ -520,7 +618,9 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                     ...i,
                     isHero: i.id === item.id ? !i.isHero : false
                   }));
-                  if (mealType === 'lunch') setLunchItems(updatedItems);
+                  if (mealType === 'breakfast') setBreakfastItems(updatedItems);
+                  else if (mealType === 'lunch') setLunchItems(updatedItems);
+                  else if (mealType === 'snacks') setSnacksItems(updatedItems);
                   else setDinnerItems(updatedItems);
                 }}
                 className={`absolute -top-3 left-8 text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full flex items-center gap-2 shadow-lg transition-all ${
@@ -832,8 +932,10 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                   const snap = await getDoc(doc(db, 'mealPlans', `${householdId}_${dateStr}`));
                   if (snap.exists()) {
                     const data = snap.data() as MealPlan;
-                    setLunchItems(data.lunch.map(i => ({ ...i, id: generateSecureId() })));
-                    setDinnerItems(data.dinner.map(i => ({ ...i, id: generateSecureId() })));
+                    if (data.breakfast) setBreakfastItems(data.breakfast.map(i => ({ ...i, id: generateSecureId() })));
+                    if (data.lunch) setLunchItems(data.lunch.map(i => ({ ...i, id: generateSecureId() })));
+                    if (data.snacks) setSnacksItems(data.snacks.map(i => ({ ...i, id: generateSecureId() })));
+                    if (data.dinner) setDinnerItems(data.dinner.map(i => ({ ...i, id: generateSecureId() })));
                   } else {
                     alert("No meal plan found for yesterday.");
                   }
@@ -876,8 +978,10 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                 />
               )}
 
-              {renderMealSection('lunch', lunchItems)}
-              {renderMealSection('dinner', dinnerItems)}
+              {(userProfile?.plannedMeals || ['lunch', 'dinner']).includes('breakfast') && renderMealSection('breakfast', breakfastItems)}
+              {(userProfile?.plannedMeals || ['lunch', 'dinner']).includes('lunch') && renderMealSection('lunch', lunchItems)}
+              {(userProfile?.plannedMeals || ['lunch', 'dinner']).includes('snacks') && renderMealSection('snacks', snacksItems)}
+              {(userProfile?.plannedMeals || ['lunch', 'dinner']).includes('dinner') && renderMealSection('dinner', dinnerItems)}
 
                     <div className="flex justify-end pt-4">
                       <button
@@ -952,7 +1056,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                     <Plus size={24} className="rotate-45" />
                   </button>
                 </div>
-                <AIMealPlanner onApprove={handleAIApprove} startDate={selectedDate} householdId={householdId} />
+                <AIMealPlanner onApprove={handleAIApprove} startDate={selectedDate} householdId={householdId} currentMealPlan={mealPlan} />
               </div>
             </motion.div>
           )}
@@ -1142,7 +1246,9 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                         ? { ...item, nutrition: { ...item.nutrition, servings: servingAnomaly.impliedServings } }
                         : item
                       );
+                    setBreakfastItems(updateServings(breakfastItems));
                     setLunchItems(updateServings(lunchItems));
+                    setSnacksItems(updateServings(snacksItems));
                     setDinnerItems(updateServings(dinnerItems));
                     setServingAnomaly(null);
                     setPendingSaveAfterAnomaly(false);

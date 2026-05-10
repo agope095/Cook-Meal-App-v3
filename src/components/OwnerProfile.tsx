@@ -20,6 +20,7 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
   const [viewPreference, setViewPreference] = useState<'casual' | 'power'>('casual');
   const [householdSize, setHouseholdSize] = useState(2);
   const [appetiteMultiplier, setAppetiteMultiplier] = useState(1.0);
+  const [plannedMeals, setPlannedMeals] = useState<('breakfast' | 'lunch' | 'snacks' | 'dinner')[]>(['lunch', 'dinner']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -61,6 +62,9 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
             setViewPreference(data.viewPreference || 'casual');
             setHouseholdSize(data.householdSize || 2);
             setAppetiteMultiplier(data.appetiteMultiplier || 1.0);
+            if (data.plannedMeals && Array.isArray(data.plannedMeals)) {
+              setPlannedMeals(data.plannedMeals);
+            }
             hasOwnHousehold = true;
           }
         }
@@ -194,6 +198,7 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
         viewPreference,
         householdSize,
         appetiteMultiplier,
+        plannedMeals,
         authorizedUids: arrayUnion(uid)
       };
 
@@ -451,6 +456,37 @@ export default function OwnerProfile({ onProfileComplete, onProfileUpdate }: Own
             ))}
           </div>
           <p className="text-[9px] text-[var(--warm-gray)] mt-3 uppercase tracking-widest opacity-60">AI suggestions will prioritize this preference.</p>
+        </div>
+
+        <div className="mt-8">
+          <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] mb-3 ml-1">Meals to Plan</label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { id: 'breakfast', label: 'Breakfast', icon: '🌅' },
+              { id: 'lunch', label: 'Lunch', icon: '☀️' },
+              { id: 'snacks', label: 'Snacks', icon: '☕' },
+              { id: 'dinner', label: 'Dinner', icon: '🌙' }
+            ].map((meal) => (
+              <label key={meal.id} className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${plannedMeals.includes(meal.id as any) ? 'border-[var(--terracotta)] bg-[var(--terracotta)]/5 text-[var(--terracotta-deep)] shadow-sm' : 'border-[var(--cream-dark)] bg-white text-[var(--warm-gray)] hover:border-[var(--terracotta)]/20'}`}>
+                <input
+                  type="checkbox"
+                  className="hidden"
+                  value={meal.id}
+                  checked={plannedMeals.includes(meal.id as any)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setPlannedMeals([...plannedMeals, meal.id as any]);
+                    } else {
+                      setPlannedMeals(plannedMeals.filter(m => m !== meal.id));
+                    }
+                  }}
+                />
+                <span className="text-2xl mb-2">{meal.icon}</span>
+                <span className="font-black text-[10px] uppercase tracking-widest">{meal.label}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-[9px] text-[var(--warm-gray)] mt-3 uppercase tracking-widest opacity-60">Select the meals you typically want to plan for.</p>
         </div>
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">

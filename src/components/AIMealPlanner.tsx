@@ -5,21 +5,22 @@ import { generateMealPlanDraft, AIMealDraft, AIMealItemDraft } from '../services
 import { getPastMeals, getFavorites, addFavorite } from '../services/historyService';
 import { auth } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MealItem } from '../types';
+import { MealItem, MealPlan } from '../types';
 
 interface AIMealPlannerProps {
   onApprove: (drafts: AIMealDraft[]) => Promise<void>;
   startDate: Date;
   householdId: string;
+  currentMealPlan?: MealPlan | null;
 }
 
-export default function AIMealPlanner({ onApprove, startDate, householdId }: AIMealPlannerProps) {
+export default function AIMealPlanner({ onApprove, startDate, householdId, currentMealPlan }: AIMealPlannerProps) {
   const [prompt, setPrompt] = useState('');
   const [tweakPrompt, setTweakPrompt] = useState('');
   const [drafts, setDrafts] = useState<AIMealDraft[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
-  const [userProfile, setUserProfile] = useState<{ name?: string, city?: string, society?: string, cookLanguage?: 'Bengali' | 'Hindi' }>({});
+  const [userProfile, setUserProfile] = useState<{ name?: string, city?: string, society?: string, cookLanguage?: 'Bengali' | 'Hindi', plannedMeals?: string[] }>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -36,7 +37,8 @@ export default function AIMealPlanner({ onApprove, startDate, householdId }: AIM
             name: data.name, 
             city: data.city || 'Unknown', 
             society: data.society || 'Unknown',
-            cookLanguage: data.cookLanguage || 'Bengali'
+            cookLanguage: data.cookLanguage || 'Bengali',
+            plannedMeals: data.plannedMeals || ['lunch', 'dinner']
           });
         }
       } catch (e) {
@@ -64,7 +66,20 @@ export default function AIMealPlanner({ onApprove, startDate, householdId }: AIM
       const startDateStr = format(startDate, 'yyyy-MM-dd');
       const pastMeals = await getPastMeals(householdId, startDate, 30);
       const favorites = await getFavorites(householdId);
-      const newDrafts = await generateMealPlanDraft(prompt, startDateStr, userProfile, undefined, pastMeals, favorites);
+
+      // Convert currentMealPlan to Draft format so AI can see it
+      let existingDraft: AIMealDraft[] | undefined = undefined;
+      if (currentMealPlan) {
+        existingDraft = [{
+          date: startDateStr,
+          breakfast: currentMealPlan.breakfast?.map(m => ({ name: m.name, quantity: m.quantity || '', instruction: m.instruction || '' })) || [],
+          lunch: currentMealPlan.lunch?.map(m => ({ name: m.name, quantity: m.quantity || '', instruction: m.instruction || '' })) || [],
+          snacks: currentMealPlan.snacks?.map(m => ({ name: m.name, quantity: m.quantity || '', instruction: m.instruction || '' })) || [],
+          dinner: currentMealPlan.dinner?.map(m => ({ name: m.name, quantity: m.quantity || '', instruction: m.instruction || '' })) || []
+        }];
+      }
+
+      const newDrafts = await generateMealPlanDraft(prompt, startDateStr, userProfile, existingDraft, pastMeals, favorites);
       
       if (Array.isArray(newDrafts) && newDrafts.length > 0) {
         setDrafts(newDrafts);
@@ -104,11 +119,19 @@ export default function AIMealPlanner({ onApprove, startDate, householdId }: AIM
   };
 
 
-  const updateItem = (dateIndex: number, mealType: 'lunch' | 'dinner', itemIndex: number, field: keyof AIMealItemDraft, value: string) => {
+  const updateItem = (dateIndex: number, mealType: string, itemIndex: number, field: keyof AIMealItemDraft, value: string) => {
     const newDrafts = [...(drafts || [])];
     if (!newDrafts[dateIndex]) return;
-    (newDrafts[dateIndex][mealType][itemIndex] as any)[field] = value;
-    setDrafts(newDrafts);
+    const mealArray = (newDrafts[dateIndex] as any)[mealType] as AIMealItemDraft[] | undefined;
+    if (mealArray && mealArray[itemIndex]) {
+      // create a shallow copy to prevent direct state mutation
+      const updatedItem = { ...mealArray[itemIndex], [field]: value };
+      const updatedMealArray = [...mealArray];
+      updatedMealArray[itemIndex] = updatedItem;
+      (newDrafts[dateIndex] as any)[mealType] = updatedMealArray;
+
+      setDrafts(newDrafts);
+    }
   };
 
   const handleApprove = async () => {
@@ -243,17 +266,19 @@ export default function AIMealPlanner({ onApprove, startDate, householdId }: AIM
               </div>
               
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                {(['lunch', 'dinner'] as const).map((mealType) => (
+                {((userProfile as any).plannedMeals || ['lunch', 'dinner']).map((mealType: string) => {
+                  const items = (day as any)[mealType] || [];
+                  return (
                   <div key={mealType} className="space-y-4">
                     <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full ${mealType === 'lunch' ? 'bg-orange-400' : 'bg-indigo-400'}`} />
+                      <div className={`w-1.5 h-1.5 rounded-full ${mealType === 'lunch' ? 'bg-orange-400' : mealType === 'dinner' ? 'bg-indigo-400' : 'bg-yellow-500'}`} />
                       {mealType}
                     </h4>
-                    {day[mealType].length === 0 ? (
+                    {items.length === 0 ? (
                       <div className="p-4 rounded-2xl border border-dashed border-gray-200 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Empty</div>
                     ) : (
                       <div className="space-y-4">
-                        {day[mealType].map((item, itemIndex) => (
+                        {items.map((item: AIMealItemDraft, itemIndex: number) => (
                           <div key={itemIndex} className="bg-white p-5 rounded-2xl border border-gray-50 shadow-sm space-y-4 hover:shadow-md transition-all group">
                             <div className="flex flex-col gap-3">
                               <div className="flex items-center justify-between">
@@ -299,7 +324,7 @@ export default function AIMealPlanner({ onApprove, startDate, householdId }: AIM
                       </div>
                     )}
                   </div>
-                ))}
+                )})}
               </div>
             </motion.div>
           ))}

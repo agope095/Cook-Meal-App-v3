@@ -172,34 +172,28 @@ export const onRequestPost: any = async (context: any) => {
     }
 
     if (action === 'meal-plan') {
-      const { prompt, startDate, existingDraft, pastMeals, favorites } = payload;
+      const { prompt, startDate, existingDraft, pastMeals, favorites, plannedMeals = ['lunch', 'dinner'] } = payload;
+
+      const mealSchemaObj = plannedMeals.map((meal: string) => `
+  "${meal}": [{
+    "name": "string", 
+    "nameBn": "${cookLanguage} script translation",
+    "quantity": "string", 
+    "quantityBn": "${cookLanguage} script translation",
+    "instruction": "string",
+    "instructionBn": "${cookLanguage} script translation",
+    "nutrition": { "kcal": number, "protein": number, "carbs": number, "fat": number }
+  }]`).join(',');
+
       let systemInstruction = `You are an expert AI meal planner. ${baseUserInfo} ${cookLanguageInfo}\nStart date: ${startDate}.\n`;
       systemInstruction += `USER MEMORY/PREFERENCES: ${currentMemory}\n`;
-      systemInstruction += `STRICT FOCUS: Only modify the specific meal (lunch/dinner) or date mentioned in the User Request. Do NOT suggest new items for other meals if they already have content or if you can leave them empty.
+      systemInstruction += `STRICT FOCUS: Only modify the specific meals (${plannedMeals.join('/')}) or date mentioned in the User Request. Do NOT suggest new items for other meals if they already have content or if you can leave them empty.
 INSTRUCTION RULE: Leave "instruction" and "instructionBn" as empty strings ("") unless the user explicitly asks for instructions, recipes, or if there is a critical dietary note. Do not add general descriptions of the dishes.
 SCHEMA: Return ONLY a JSON array of objects with this EXACT structure:
 [{
-  "date": "YYYY-MM-DD",
-  "lunch": [{
-    "name": "string", 
-    "nameBn": "${cookLanguage} script translation",
-    "quantity": "string", 
-    "quantityBn": "${cookLanguage} script translation",
-    "instruction": "string",
-    "instructionBn": "${cookLanguage} script translation",
-    "nutrition": { "kcal": number, "protein": number, "carbs": number, "fat": number }
-  }],
-  "dinner": [{
-    "name": "string", 
-    "nameBn": "${cookLanguage} script translation",
-    "quantity": "string", 
-    "quantityBn": "${cookLanguage} script translation",
-    "instruction": "string",
-    "instructionBn": "${cookLanguage} script translation",
-    "nutrition": { "kcal": number, "protein": number, "carbs": number, "fat": number }
-  }]
+  "date": "YYYY-MM-DD",${mealSchemaObj}
 }]
-If no items for lunch/dinner, return an empty array []. Keep suggestions healthy and balanced. Use high-quality ${cookLanguage} script. QUANTITY RULE: If a quantity is mentioned, calculate nutrition for that amount. Otherwise, estimate based on typical portion sizes. SERVING INTELLIGENCE: For each item, also return inside "nutrition": "per100g" (nutrition per 100g of the cooked dish as {kcal, protein, carbs, fat}), "servingGrams" (estimated total weight in grams for the quantity specified), and "servings" (integer number of persons the quantity is intended for — infer from context like "for 2 people", "4 portions"; default to 1 if unclear).`;
+If no items for a meal, return an empty array []. Keep suggestions healthy and balanced. Use high-quality ${cookLanguage} script. QUANTITY RULE: If a quantity is mentioned, calculate nutrition for that amount. Otherwise, estimate based on typical portion sizes. SERVING INTELLIGENCE: For each item, also return inside "nutrition": "per100g" (nutrition per 100g of the cooked dish as {kcal, protein, carbs, fat}), "servingGrams" (estimated total weight in grams for the quantity specified), and "servings" (integer number of persons the quantity is intended for — infer from context like "for 2 people", "4 portions"; default to 1 if unclear).`;
 
       if (pastMeals) systemInstruction += `\nPast meals:\n${pastMeals}`;
       if (favorites?.length) systemInstruction += `\nFavorites:\n${favorites.join(', ')}`;
@@ -225,7 +219,10 @@ If no items for lunch/dinner, return an empty array []. Keep suggestions healthy
       systemInstruction += `GREETING: Use the User's City (${userProfile.city}) for location-based greetings (e.g., "Good evening in ${userProfile.city}!"). DO NOT mention the Society Name (${userProfile.society}) in the greeting unless the user specifically asks about it or if it's relevant to a specific local event/ingredient. Keep the greeting focused on the City.\n`;
       systemInstruction += `STRICT RULE: Only use the "User's Past meals" provided below. If today's meal isn't listed, DO NOT guess what the user ate. Say "I don't see what you had for lunch today yet—want to tell me?" instead of assuming.\n`;
       systemInstruction += `CONVERSATION STYLE: Be warm and helpful. Keep responses to 2-4 sentences. Feel free to ask a follow-up question to keep the conversation going.\n`;
-      systemInstruction += `MEMORY UPDATE: If the user mentions a preference, allergy, or habit, return your response inside a JSON object like this: {"reply": "...", "updateMemory": "user likes spicy food"}. Otherwise, just return the text reply.`;
+      systemInstruction += `MEMORY UPDATE: If the user mentions a preference, allergy, or habit, return your response inside a JSON object like this: {"reply": "...", "updateMemory": "user likes spicy food"}.
+MEAL ADDITION RULE: If the user explicitly asks to add a brainstormed recipe to their meal plan, YOU MUST FIRST confirm the number of people and the exact meal (e.g., 'lunch' or 'dinner' on a specific day). Once confirmed, return a JSON object with this exact structure:
+{"reply": "...", "addToPlan": {"date": "YYYY-MM-DD", "meal": "lunch", "items": [{"name": "string", "nameBn": "${cookLanguage} translation", "quantity": "string", "quantityBn": "${cookLanguage} translation", "instruction": "string", "instructionBn": "${cookLanguage} translation", "nutrition": { "kcal": number, "protein": number, "carbs": number, "fat": number }}]}}
+Otherwise, just return the text reply or the JSON with "reply" and "updateMemory".`;
       
       if (pastMeals) systemInstruction += `\nUser's Past meals:\n${pastMeals}`;
       if (favorites?.length) systemInstruction += `\nUser's Favorites:\n${favorites.join(', ')}`;
@@ -244,6 +241,7 @@ If no items for lunch/dinner, return an empty array []. Keep suggestions healthy
           return jsonResponse(200, { 
             data: parsed.reply, 
             memoryUpdate: parsed.updateMemory,
+            addToPlan: parsed.addToPlan,
             summarizedMemory: memoryWasSummarized ? currentMemory : undefined 
           });
         }
