@@ -574,7 +574,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
   };
 
   const renderMealSection = (mealType: 'breakfast' | 'lunch' | 'snacks' | 'dinner', items: MealItem[]) => (
-    <div className="bg-white/40 backdrop-blur-md p-3 md:p-4 rounded-[24px] md:rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 mb-2 md:mb-3 relative overflow-hidden group">
+    <div className="bg-white/40 backdrop-blur-md p-2 md:p-4 rounded-[24px] md:rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 mb-2 md:mb-3 relative overflow-hidden group">
       {/* Background Accent */}
       <div className={`absolute -right-20 -top-20 w-64 h-64 rounded-full blur-3xl opacity-10 transition-colors ${mealType === 'lunch' ? 'bg-[var(--terracotta)]' : 'bg-[var(--sage)]'}`} />
       
@@ -606,7 +606,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
             <motion.div 
               layout
               key={item.id} 
-              className={`group/item relative flex flex-col p-3.5 rounded-[28px] border-2 transition-all ${
+              className={`group/item relative flex flex-col p-3 pb-5 rounded-[28px] border-2 transition-all overflow-hidden ${
                 item.isHero 
                   ? 'bg-white border-[var(--charcoal)] shadow-xl ring-4 ring-[var(--charcoal)]/5 w-full' 
                   : 'bg-white/80 border-transparent hover:border-[var(--cream-dark)] hover:shadow-lg'
@@ -633,7 +633,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
               </button>
 
               <div className="flex gap-4">
-                <div className="flex-1 space-y-4">
+                <div className="flex-1 min-w-0 space-y-4">
                   <div className="flex items-start gap-3">
                     {/* Dietary Selector */}
                     <button 
@@ -650,7 +650,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                       <div className={`w-2 h-2 md:w-4 md:h-4 rounded-full bg-current`} />
                     </button>
 
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3">
                           <input
                             type="text"
@@ -665,7 +665,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                               placeholder="Qty"
                               value={item.quantity}
                               onChange={(e) => updateItem(mealType, item.id, 'quantity', e.target.value)}
-                              className="bg-transparent text-[9px] font-black uppercase tracking-widest w-24 focus:outline-none text-[var(--charcoal)] text-center"
+                              className="bg-transparent text-[9px] font-black uppercase tracking-widest w-14 sm:w-24 focus:outline-none text-[var(--charcoal)] text-center"
                             />
                           </div>
                         </div>
@@ -695,15 +695,15 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                           ) : (
                             <button 
                               onClick={() => setSelectedMealForNutrition(item)}
-                              className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-[var(--cream-dark)] shadow-sm hover:shadow-md transition-all group"
+                              className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-[var(--cream-dark)] shadow-sm hover:shadow-md transition-all group"
                             >
-                              <div className="w-4 h-4 bg-[var(--terracotta)]/10 rounded-full flex items-center justify-center">
-                                <Zap size={8} className="text-[var(--terracotta)]" />
+                              <div className="w-3.5 h-3.5 bg-[var(--terracotta)]/10 rounded-full flex items-center justify-center">
+                                <Zap size={7} className="text-[var(--terracotta)]" />
                               </div>
-                              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--charcoal)]">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-[var(--charcoal)]">
                                 {item.nutrition.kcal} kcal
                               </span>
-                              <Activity size={10} className="text-[var(--terracotta)] opacity-0 group-hover:opacity-100 transition-all" />
+                              <Activity size={9} className="text-[var(--terracotta)] opacity-0 group-hover:opacity-100 transition-all" />
                             </button>
                           )}
                         </div>
@@ -757,7 +757,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                       </div>
                     </div>
                     
-                    <div className="flex flex-col items-center gap-2 mt-4">
+                    <div className="flex flex-col items-center gap-2 mt-4 shrink-0">
                       {item.isHero && (
                         <div className="md:hidden">
                           <Sparkles size={18} className="text-[var(--terracotta)] animate-pulse" />
@@ -773,20 +773,20 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-3 border-t border-[var(--cream-dark)]/20 space-y-2">
+                  <div className="mt-2.5 pt-2.5 border-t border-[var(--cream-dark)]/20 space-y-1.5">
                     <input
                       type="text"
                       placeholder="Add instructions or notes..."
                       value={item.instruction || ''}
                       onChange={(e) => updateItem(mealType, item.id, 'instruction', e.target.value)}
-                      className="w-full text-[10px] md:text-xs text-[var(--charcoal-soft)] bg-[var(--cream)]/60 px-3 py-2 rounded-xl placeholder:text-[var(--warm-gray)] focus:outline-none border border-[var(--cream-dark)]/40 hover:border-[var(--terracotta)]/20 focus:border-[var(--terracotta)]/40 transition-all shadow-sm truncate"
+                      className="w-full text-[9px] md:text-xs text-[var(--charcoal-soft)] bg-[var(--cream)]/60 px-3 py-2 rounded-xl placeholder:text-[var(--warm-gray)] focus:outline-none border border-[var(--cream-dark)]/40 hover:border-[var(--terracotta)]/20 focus:border-[var(--terracotta)]/40 transition-all shadow-sm truncate"
                     />
                     <input
                       type="text"
                       placeholder="Paste YouTube Video URL (optional)"
                       value={item.videoUrl || ''}
                       onChange={(e) => updateItem(mealType, item.id, 'videoUrl', e.target.value)}
-                      className="w-full text-[10px] md:text-xs text-[var(--charcoal-soft)] bg-[var(--cream)]/60 px-3 py-2 rounded-xl placeholder:text-[var(--warm-gray)] focus:outline-none border border-[var(--cream-dark)]/40 hover:border-[var(--terracotta)]/20 focus:border-[var(--terracotta)]/40 transition-all shadow-sm truncate"
+                      className="w-full text-[9px] md:text-xs text-[var(--charcoal-soft)] bg-[var(--cream)]/60 px-3 py-2 rounded-xl placeholder:text-[var(--warm-gray)] focus:outline-none border border-[var(--cream-dark)]/40 hover:border-[var(--terracotta)]/20 focus:border-[var(--terracotta)]/40 transition-all shadow-sm truncate"
                     />
                   </div>
                 </div>
@@ -800,11 +800,11 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
 
   return (
     <div className="min-h-screen bg-[var(--cream)] pt-0 paper-grain">
-      <div className="max-w-5xl mx-auto px-4">
+      <div className="max-w-5xl mx-auto px-1.5">
         {/* Unified Intelligence Hub (Sticky) */}
         <div className="sticky top-0 z-30 mb-4 space-y-2.5">
           <div className="glass-card p-1 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.04)] flex flex-col md:flex-row items-center justify-between gap-1">
-            <div className="flex items-center justify-between w-full md:w-auto px-4 md:px-0 py-2 md:py-0">
+            <div className="flex items-center justify-between w-full md:w-auto px-2 md:px-0 py-2 md:py-0">
               <div className="flex items-center gap-3 md:pl-3">
                 <div className="hidden md:flex w-12 h-12 bg-[var(--charcoal)] text-white rounded-[18px] items-center justify-center shadow-lg rotate-3">
                   <CalendarIcon size={22} />
@@ -865,7 +865,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
               
               <button
                 onClick={() => setActiveTab('discover')}
-                className="bg-white text-gray-400 p-2.5 rounded-2xl border border-gray-100 hover:text-gray-900 hover:border-gray-200 shadow-sm transition-all"
+                className="bg-white text-gray-400 p-2 rounded-2xl border border-gray-100 hover:text-gray-900 hover:border-gray-200 shadow-sm transition-all"
                 title="Search History"
               >
                 <Search size={18} />
@@ -874,7 +874,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
               <button
                 onClick={handleGenerateGroceries}
                 disabled={isGeneratingGroceries}
-                className="bg-white text-[var(--charcoal)] p-2.5 px-6 rounded-2xl border border-[var(--cream-dark)] shadow-sm hover:shadow-md hover:border-[var(--terracotta)]/20 transition-all flex items-center gap-3 group relative overflow-hidden"
+                className="bg-white text-[var(--charcoal)] p-2 px-4 rounded-2xl border border-[var(--cream-dark)] shadow-sm hover:shadow-md hover:border-[var(--terracotta)]/20 transition-all flex items-center gap-2 group relative overflow-hidden"
                 title="Generate Grocery List"
               >
                 {isGeneratingGroceries ? (
@@ -887,7 +887,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
               
               <button
                 onClick={() => setActiveTab('ai')}
-                className="bg-[var(--charcoal)] text-white p-2.5 px-6 rounded-2xl shadow-xl hover:shadow-[var(--terracotta)]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 group"
+                className="bg-[var(--charcoal)] text-white p-2 px-4 rounded-2xl shadow-xl hover:shadow-[var(--terracotta)]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2 group"
                 title="AI Assistant"
               >
                 <Sparkles size={18} className="text-[var(--terracotta)] group-hover:rotate-12 transition-transform" />

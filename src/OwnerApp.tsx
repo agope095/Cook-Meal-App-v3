@@ -368,7 +368,7 @@ export default function OwnerApp() {
               <OwnerProfile onProfileComplete={() => setIsOwner(true)} onProfileUpdate={setUserProfile} />
             </div>
           ) : (
-            <div className="max-w-5xl mx-auto px-4 pb-32">
+            <div className="max-w-5xl mx-auto px-1.5 pb-32">
               <Routes>
                 <Route path="/" element={<OwnerDashboard householdId={householdId!} />} />
                 <Route path="/cooks" element={<ManageCooks householdId={householdId!} />} />
@@ -379,7 +379,7 @@ export default function OwnerApp() {
 
               {/* Bottom Navigation for Mobile / Fixed Navigation for Desktop */}
               <nav
-                className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--charcoal)]/90 backdrop-blur-xl border border-white/10 px-3 py-3 rounded-[32px] shadow-2xl z-50 flex items-center gap-2"
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--charcoal)]/90 backdrop-blur-xl border border-white/10 px-2 py-2 rounded-[32px] shadow-2xl z-50 flex items-center gap-1.5"
                 style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
               >
                 {[
@@ -399,7 +399,7 @@ export default function OwnerApp() {
                     </>
                   );
 
-                  const commonClass = `flex items-center gap-2 px-6 py-3 rounded-[24px] transition-all relative ${
+                  const commonClass = `flex items-center gap-1.5 px-4 py-2.5 rounded-[24px] transition-all relative ${
                     isActive 
                       ? 'bg-[var(--paper)] text-[var(--charcoal)] shadow-lg scale-105' 
                       : 'text-white/40 hover:text-white'
