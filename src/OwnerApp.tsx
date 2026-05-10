@@ -28,6 +28,7 @@ export default function OwnerApp() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [isExistingUser, setIsExistingUser] = useState(false);
   const location = useLocation();
@@ -378,28 +379,27 @@ export default function OwnerApp() {
 
               {/* Bottom Navigation for Mobile / Fixed Navigation for Desktop */}
               <nav
-                className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 bg-[var(--charcoal)]/90 backdrop-blur-xl border border-white/10 px-2 py-2 rounded-[32px] shadow-2xl z-50 flex items-center gap-1"
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--charcoal)]/90 backdrop-blur-xl border border-white/10 px-3 py-3 rounded-[32px] shadow-2xl z-50 flex items-center gap-2"
                 style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
               >
                 {[
                   { to: '/owner', icon: Calendar, label: 'Planner' },
                   { to: '/owner/cooks', icon: Users, label: 'Cooks' },
-                  { type: 'button', icon: ChefHat, label: 'AI', onClick: () => setIsChatOpen(true), active: isChatOpen },
-                  { to: '/owner/family', icon: Heart, label: 'Family' },
-                  { to: '/owner/profile', icon: Settings, label: 'Settings' }
+                  ...(isMobile ? [{ type: 'button', icon: ChefHat, label: 'AI', onClick: () => setIsChatOpen(true), active: isChatOpen }] : []),
+                  { to: '/owner/family', icon: Heart, label: 'Family' }
                 ].map((item: any, idx) => {
                   const isActive = item.type === 'button' ? item.active : location.pathname.replace(/\/$/, '') === item.to.replace(/\/$/, '');
                   
                   const content = (
                     <>
-                      <item.icon size={18} className="md:size-20" />
-                      <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${isActive ? 'block' : 'hidden md:block'}`}>
+                      <item.icon size={20} />
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'block' : 'hidden md:block'}`}>
                         {item.label}
                       </span>
                     </>
                   );
 
-                  const commonClass = `flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-[24px] transition-all relative ${
+                  const commonClass = `flex items-center gap-2 px-6 py-3 rounded-[24px] transition-all relative ${
                     isActive 
                       ? 'bg-[var(--paper)] text-[var(--charcoal)] shadow-lg scale-105' 
                       : 'text-white/40 hover:text-white'
@@ -421,8 +421,8 @@ export default function OwnerApp() {
                       {content}
                     </Link>
                   );
-                })}
-              </nav>
+              })}
+            </nav>
             </div>
           )}
         </main>
@@ -430,8 +430,8 @@ export default function OwnerApp() {
         {isOwner && (
           <ChatAssistant 
             householdId={householdId!} 
-            externalOpen={isChatOpen} 
-            onClose={() => setIsChatOpen(false)} 
+            externalOpen={isMobile ? isChatOpen : undefined} 
+            onClose={isMobile ? () => setIsChatOpen(false) : undefined} 
           />
         )}
       </div>

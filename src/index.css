@@ -173,8 +173,8 @@ textarea:focus {
 
 /* Touch target sizing for mobile accessibility */
 @media (max-width: 768px) {
-  button,
-  [role="button"],
+  button:not(.no-min-touch),
+  [role="button"]:not(.no-min-touch),
   input[type="submit"],
   input[type="button"] {
     min-height: 44px;

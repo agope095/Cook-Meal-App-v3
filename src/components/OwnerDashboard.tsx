@@ -608,7 +608,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
               key={item.id} 
               className={`group/item relative flex flex-col p-3.5 rounded-[28px] border-2 transition-all ${
                 item.isHero 
-                  ? 'bg-white border-[var(--charcoal)] shadow-xl ring-4 ring-[var(--charcoal)]/5' 
+                  ? 'bg-white border-[var(--charcoal)] shadow-xl ring-4 ring-[var(--charcoal)]/5 w-full' 
                   : 'bg-white/80 border-transparent hover:border-[var(--cream-dark)] hover:shadow-lg'
               }`}
             >
@@ -623,7 +623,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                   else if (mealType === 'snacks') setSnacksItems(updatedItems);
                   else setDinnerItems(updatedItems);
                 }}
-                className={`absolute -top-3 right-12 md:left-8 text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2.5 py-1 md:px-4 md:py-1.5 rounded-full flex items-center gap-1.5 md:gap-2 shadow-lg transition-all z-20 ${
+                className={`hidden md:flex absolute -top-3 md:left-8 text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2.5 py-1 md:px-4 md:py-1.5 rounded-full items-center gap-1.5 md:gap-2 shadow-lg transition-all z-20 ${
                   item.isHero ? 'bg-[var(--charcoal)] text-white' : 'bg-[var(--cream-dark)] text-[var(--warm-gray)] opacity-0 md:group-hover/item:opacity-100 hover:bg-[var(--terracotta)] hover:text-white'
                 }`}
               >
@@ -641,34 +641,34 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                         const next: any = item.dietaryType === 'veg' ? 'egg' : item.dietaryType === 'egg' ? 'non-veg' : 'veg';
                         updateItem(mealType, item.id, 'dietaryType', next);
                       }}
-                      className={`shrink-0 w-2.5 h-2.5 md:w-5 md:h-5 rounded-[4px] border md:border-2 mt-2 md:mt-1 flex items-center justify-center transition-colors ${
-                        item.dietaryType === 'veg' ? 'border-green-500' : item.dietaryType === 'egg' ? 'border-yellow-500' : 'border-red-500'
+                      className={`no-min-touch shrink-0 w-2.5 h-2.5 md:w-5 md:h-5 rounded-full border-0 mt-2 md:mt-1 flex items-center justify-center transition-colors ${
+                        item.dietaryType === 'veg' ? 'text-green-500' : 
+                        item.dietaryType === 'egg' ? 'text-yellow-500' : 
+                        'text-red-500'
                       }`}
                     >
-                      <div className={`w-1 h-1 md:w-2 md:h-2 rounded-full ${
-                        item.dietaryType === 'veg' ? 'bg-green-500' : item.dietaryType === 'egg' ? 'bg-yellow-500' : 'bg-red-500'
-                      }`} />
+                      <div className={`w-2 h-2 md:w-4 md:h-4 rounded-full bg-current`} />
                     </button>
 
                     <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="text"
-                          placeholder="What's cooking?"
-                          value={item.name}
-                          onChange={(e) => updateItem(mealType, item.id, 'name', e.target.value)}
-                          className={`flex-1 text-lg font-[var(--font-display)] font-bold bg-transparent placeholder:text-[var(--cream-dark)] focus:outline-none border-b-2 border-transparent hover:border-[var(--cream-dark)]/30 focus:border-[var(--terracotta)]/40 transition-all ${item.isHero ? 'text-[var(--charcoal)]' : 'text-[var(--charcoal-soft)]'}`}
-                        />
-                        <div className="flex items-center bg-[var(--cream)]/80 px-2 py-1 rounded-lg border border-[var(--cream-dark)]/30">
+                        <div className="flex items-center gap-3">
                           <input
                             type="text"
-                            placeholder="Qty"
-                            value={item.quantity}
-                            onChange={(e) => updateItem(mealType, item.id, 'quantity', e.target.value)}
-                            className="bg-transparent text-[9px] font-black uppercase tracking-widest w-12 focus:outline-none text-[var(--charcoal)] text-center"
+                            placeholder="What's cooking?"
+                            value={item.name}
+                            onChange={(e) => updateItem(mealType, item.id, 'name', e.target.value)}
+                            className={`flex-1 text-lg font-[var(--font-display)] font-bold bg-transparent placeholder:text-[var(--cream-dark)] focus:outline-none border-b-2 border-transparent hover:border-[var(--cream-dark)]/30 focus:border-[var(--terracotta)]/40 transition-all ${item.isHero ? 'text-[var(--charcoal)]' : 'text-[var(--charcoal-soft)]'}`}
                           />
+                          <div className="flex items-center bg-[var(--cream)]/80 px-3 py-1 rounded-lg border border-[var(--cream-dark)]/30 shrink-0">
+                            <input
+                              type="text"
+                              placeholder="Qty"
+                              value={item.quantity}
+                              onChange={(e) => updateItem(mealType, item.id, 'quantity', e.target.value)}
+                              className="bg-transparent text-[9px] font-black uppercase tracking-widest w-24 focus:outline-none text-[var(--charcoal)] text-center"
+                            />
+                          </div>
                         </div>
-                      </div>
                       
                       {/* Nutritional Intelligence Layer */}
                       {item.nutrition ? (
@@ -757,13 +757,20 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                       </div>
                     </div>
                     
-                    <button
-                      onClick={() => removeItem(mealType, item.id)}
-                      className="opacity-100 md:opacity-0 md:group-hover/item:opacity-100 text-gray-300 hover:text-red-500 transition-all p-2"
-                      aria-label="Delete meal"
-                    >
-                      <Trash2 size={16} md:size={18} />
-                    </button>
+                    <div className="flex flex-col items-center gap-2 mt-4">
+                      {item.isHero && (
+                        <div className="md:hidden">
+                          <Sparkles size={18} className="text-[var(--terracotta)] animate-pulse" />
+                        </div>
+                      )}
+                      <button
+                        onClick={() => removeItem(mealType, item.id)}
+                        className="opacity-100 md:opacity-0 md:group-hover/item:opacity-100 text-gray-300 hover:text-red-500 transition-all p-2"
+                        aria-label="Delete meal"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-3 pt-3 border-t border-[var(--cream-dark)]/20 space-y-2">
