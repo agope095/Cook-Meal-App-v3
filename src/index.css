@@ -197,3 +197,18 @@ textarea:focus {
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255,255,255,0.4);
 }
+
+/* Mobile Scaling for iPhone 16 Pro and high-density devices */
+@media (max-width: 640px) {
+  html {
+    font-size: 15px; /* Subtle base reduction */
+  }
+  
+  h1, .text-3xl { font-size: 1.75rem !important; }
+  h2, .text-2xl { font-size: 1.5rem !important; }
+  
+  /* Tighter vertical spacing globally on mobile */
+  .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem !important;
+  }
+}

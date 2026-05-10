@@ -574,7 +574,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
   };
 
   const renderMealSection = (mealType: 'breakfast' | 'lunch' | 'snacks' | 'dinner', items: MealItem[]) => (
-    <div className="bg-white/40 backdrop-blur-md p-4 rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 mb-3 relative overflow-hidden group">
+    <div className="bg-white/40 backdrop-blur-md p-3 md:p-4 rounded-[24px] md:rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 mb-2 md:mb-3 relative overflow-hidden group">
       {/* Background Accent */}
       <div className={`absolute -right-20 -top-20 w-64 h-64 rounded-full blur-3xl opacity-10 transition-colors ${mealType === 'lunch' ? 'bg-[var(--terracotta)]' : 'bg-[var(--sage)]'}`} />
       
@@ -623,12 +623,13 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                   else if (mealType === 'snacks') setSnacksItems(updatedItems);
                   else setDinnerItems(updatedItems);
                 }}
-                className={`absolute -top-3 left-8 text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full flex items-center gap-2 shadow-lg transition-all ${
-                  item.isHero ? 'bg-[var(--charcoal)] text-white' : 'bg-[var(--cream-dark)] text-[var(--warm-gray)] opacity-0 group-hover/item:opacity-100 hover:bg-[var(--terracotta)] hover:text-white'
+                className={`absolute -top-3 right-12 md:left-8 text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2.5 py-1 md:px-4 md:py-1.5 rounded-full flex items-center gap-1.5 md:gap-2 shadow-lg transition-all z-20 ${
+                  item.isHero ? 'bg-[var(--charcoal)] text-white' : 'bg-[var(--cream-dark)] text-[var(--warm-gray)] opacity-0 md:group-hover/item:opacity-100 hover:bg-[var(--terracotta)] hover:text-white'
                 }`}
               >
-                <Sparkles size={10} className={item.isHero ? 'text-[var(--terracotta)]' : ''} />
-                {item.isHero ? 'Hero Dish' : 'Set as Hero'}
+                <Sparkles size={8} className={item.isHero ? 'text-[var(--terracotta)]' : ''} />
+                <span className="hidden md:inline">{item.isHero ? 'Hero Dish' : 'Set as Hero'}</span>
+                <span className="md:hidden">Hero</span>
               </button>
 
               <div className="flex gap-4">
@@ -640,11 +641,11 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                         const next: any = item.dietaryType === 'veg' ? 'egg' : item.dietaryType === 'egg' ? 'non-veg' : 'veg';
                         updateItem(mealType, item.id, 'dietaryType', next);
                       }}
-                      className={`shrink-0 w-5 h-5 rounded-md border-2 mt-1 flex items-center justify-center transition-colors ${
+                      className={`shrink-0 w-2.5 h-2.5 md:w-5 md:h-5 rounded-[4px] border md:border-2 mt-2 md:mt-1 flex items-center justify-center transition-colors ${
                         item.dietaryType === 'veg' ? 'border-green-500' : item.dietaryType === 'egg' ? 'border-yellow-500' : 'border-red-500'
                       }`}
                     >
-                      <div className={`w-2 h-2 rounded-full ${
+                      <div className={`w-1 h-1 md:w-2 md:h-2 rounded-full ${
                         item.dietaryType === 'veg' ? 'bg-green-500' : item.dietaryType === 'egg' ? 'bg-yellow-500' : 'bg-red-500'
                       }`} />
                     </button>
@@ -758,9 +759,10 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                     
                     <button
                       onClick={() => removeItem(mealType, item.id)}
-                      className="opacity-0 group-hover/item:opacity-100 text-gray-300 hover:text-red-500 transition-all p-2"
+                      className="opacity-100 md:opacity-0 md:group-hover/item:opacity-100 text-gray-300 hover:text-red-500 transition-all p-2"
+                      aria-label="Delete meal"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={16} md:size={18} />
                     </button>
                   </div>
 
@@ -770,14 +772,14 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                       placeholder="Add instructions or notes..."
                       value={item.instruction || ''}
                       onChange={(e) => updateItem(mealType, item.id, 'instruction', e.target.value)}
-                      className="w-full text-xs text-[var(--charcoal-soft)] bg-[var(--cream)]/60 px-3 py-2 rounded-xl placeholder:text-[var(--warm-gray)] focus:outline-none border border-[var(--cream-dark)]/40 hover:border-[var(--terracotta)]/20 focus:border-[var(--terracotta)]/40 transition-all shadow-sm"
+                      className="w-full text-[10px] md:text-xs text-[var(--charcoal-soft)] bg-[var(--cream)]/60 px-3 py-2 rounded-xl placeholder:text-[var(--warm-gray)] focus:outline-none border border-[var(--cream-dark)]/40 hover:border-[var(--terracotta)]/20 focus:border-[var(--terracotta)]/40 transition-all shadow-sm truncate"
                     />
                     <input
                       type="text"
                       placeholder="Paste YouTube Video URL (optional)"
                       value={item.videoUrl || ''}
                       onChange={(e) => updateItem(mealType, item.id, 'videoUrl', e.target.value)}
-                      className="w-full text-xs text-[var(--charcoal-soft)] bg-[var(--cream)]/60 px-3 py-2 rounded-xl placeholder:text-[var(--warm-gray)] focus:outline-none border border-[var(--cream-dark)]/40 hover:border-[var(--terracotta)]/20 focus:border-[var(--terracotta)]/40 transition-all shadow-sm"
+                      className="w-full text-[10px] md:text-xs text-[var(--charcoal-soft)] bg-[var(--cream)]/60 px-3 py-2 rounded-xl placeholder:text-[var(--warm-gray)] focus:outline-none border border-[var(--cream-dark)]/40 hover:border-[var(--terracotta)]/20 focus:border-[var(--terracotta)]/40 transition-all shadow-sm truncate"
                     />
                   </div>
                 </div>
@@ -794,35 +796,38 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       <div className="max-w-5xl mx-auto px-4">
         {/* Unified Intelligence Hub (Sticky) */}
         <div className="sticky top-0 z-30 mb-4 space-y-2.5">
-          <div className="bg-white/70 backdrop-blur-2xl border border-white p-1 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.04)] flex flex-col md:flex-row items-center justify-between gap-1">
-            <div className="flex items-center gap-3 pl-3 py-1">
-              <div className="w-12 h-12 bg-[var(--charcoal)] text-white rounded-[18px] flex items-center justify-center shadow-lg rotate-3">
-                <CalendarIcon size={22} />
+          <div className="glass-card p-1 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.04)] flex flex-col md:flex-row items-center justify-between gap-1">
+            <div className="flex items-center justify-between w-full md:w-auto px-4 md:px-0 py-2 md:py-0">
+              <div className="flex items-center gap-3 md:pl-3">
+                <div className="hidden md:flex w-12 h-12 bg-[var(--charcoal)] text-white rounded-[18px] items-center justify-center shadow-lg rotate-3">
+                  <CalendarIcon size={22} />
+                </div>
+                <div className="flex flex-col">
+                  <h1 className="text-lg md:text-xl font-[var(--font-display)] font-bold text-[var(--charcoal)] tracking-tight leading-none">Planner</h1>
+                  <p className="text-[9px] md:text-[10px] font-black text-[var(--warm-gray)] uppercase tracking-widest mt-1 md:mt-1.5">
+                    {viewMode === 'daily' && format(selectedDate, 'MMM dd, yyyy')}
+                    {viewMode === 'weekly' && `Week ${format(selectedDate, 'w')}`}
+                    {viewMode === 'monthly' && format(selectedDate, 'MMMM yyyy')}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-[var(--font-display)] font-bold text-[var(--charcoal)] tracking-tight leading-none">Planner</h1>
-                <p className="text-[10px] font-black text-[var(--warm-gray)] uppercase tracking-widest mt-1.5">
-                  {viewMode === 'daily' && format(selectedDate, 'MMM dd, yyyy')}
-                  {viewMode === 'weekly' && `Week ${format(selectedDate, 'w')}`}
-                  {viewMode === 'monthly' && format(selectedDate, 'MMMM yyyy')}
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-1.5 bg-[var(--cream-dark)]/30 p-1.5 rounded-[24px] flex-wrap justify-center">
-              {(['monthly', 'weekly', 'daily'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    viewMode === mode 
-                      ? 'bg-white text-[var(--charcoal)] shadow-md scale-105' 
-                      : 'text-[var(--warm-gray)] hover:text-[var(--charcoal)]'
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
+              <div className="flex items-center gap-1 bg-[var(--cream-dark)]/30 p-1 rounded-2xl">
+                {(['monthly', 'weekly', 'daily'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`px-3 md:px-5 py-1.5 md:py-2.5 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${
+                      viewMode === mode 
+                        ? 'bg-white text-[var(--charcoal)] shadow-sm' 
+                        : 'text-[var(--warm-gray)] hover:text-[var(--charcoal)]'
+                    }`}
+                  >
+                    <span className="hidden md:inline">{mode}</span>
+                    <span className="md:hidden">{mode.charAt(0)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="hidden md:flex h-8 w-px bg-gray-100 mx-2" />
@@ -940,10 +945,11 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
                     alert("No meal plan found for yesterday.");
                   }
                 }}
-                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[var(--warm-gray)] hover:text-[var(--charcoal)] transition-colors bg-white/80 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white shadow-sm"
+                className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[var(--warm-gray)] hover:text-[var(--charcoal)] transition-colors bg-white/80 backdrop-blur-md px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-white shadow-sm"
               >
-                <Plus size={14} />
-                Repeat Yesterday
+                <Plus size={12} />
+                <span className="hidden sm:inline">Repeat Yesterday</span>
+                <span className="sm:hidden">Repeat</span>
               </button>
             </motion.div>
           )}

@@ -147,8 +147,8 @@ export default function OwnerApp() {
 
   return (
     <div className="h-screen bg-[var(--cream)] paper-grain flex flex-col overflow-hidden">
-        <header className="bg-white/80 backdrop-blur-xl border-b border-[var(--cream-dark)] sticky top-0 z-40 transition-all shadow-sm">
-          <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <header className={`bg-white/80 backdrop-blur-xl border-b border-[var(--cream-dark)] ${user ? 'sticky' : 'relative'} top-0 z-40 transition-all shadow-sm`}>
+          <div className="max-w-7xl mx-auto px-6 h-16 sm:h-20 flex items-center justify-between">
             <Link to="/owner" className="flex items-center gap-3 group">
               <div className="bg-[var(--charcoal)] text-[var(--paper)] p-2.5 rounded-2xl group-hover:rotate-6 transition-transform shadow-lg">
                 <CalendarIcon size={24} />
@@ -264,7 +264,7 @@ export default function OwnerApp() {
                       <button
                         type="button"
                         onClick={() => { setShowReset(true); setResetEmail(email); }}
-                        className="text-xs text-[var(--terracotta)] hover:underline absolute right-0 -top-6"
+                        className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--terracotta)] hover:underline absolute right-0 -top-7 bg-[var(--terracotta)]/10 px-3 py-1.5 rounded-xl transition-all active:scale-95"
                       >
                         Forgot Password?
                       </button>
@@ -377,36 +377,62 @@ export default function OwnerApp() {
 
               {/* Bottom Navigation for Mobile / Fixed Navigation for Desktop */}
               <nav
-                className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--charcoal)]/90 backdrop-blur-xl border border-white/10 px-3 py-3 rounded-[32px] shadow-2xl z-50 flex items-center gap-2"
+                className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 bg-[var(--charcoal)]/90 backdrop-blur-xl border border-white/10 px-2 py-2 rounded-[32px] shadow-2xl z-50 flex items-center gap-1"
                 style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
               >
                 {[
                   { to: '/owner', icon: Calendar, label: 'Planner' },
                   { to: '/owner/cooks', icon: Users, label: 'Cooks' },
+                  { type: 'button', icon: ChefHat, label: 'AI', onClick: () => setIsChatOpen(true), active: isChatOpen },
                   { to: '/owner/family', icon: Heart, label: 'Family' },
                   { to: '/owner/profile', icon: Settings, label: 'Settings' }
-                ].map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-[24px] transition-all relative ${
-                      location.pathname.replace(/\/$/, '') === item.to.replace(/\/$/, '')
-                        ? 'bg-[var(--paper)] text-[var(--charcoal)] shadow-lg scale-105' 
-                        : 'text-white/40 hover:text-white'
-                    }`}
-                  >
-                    <item.icon size={20} />
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${location.pathname === item.to ? 'block' : 'hidden md:block'}`}>
-                      {item.label}
-                    </span>
-                  </Link>
-                ))}
+                ].map((item: any, idx) => {
+                  const isActive = item.type === 'button' ? item.active : location.pathname.replace(/\/$/, '') === item.to.replace(/\/$/, '');
+                  
+                  const content = (
+                    <>
+                      <item.icon size={18} className="md:size-20" />
+                      <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${isActive ? 'block' : 'hidden md:block'}`}>
+                        {item.label}
+                      </span>
+                    </>
+                  );
+
+                  const commonClass = `flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-[24px] transition-all relative ${
+                    isActive 
+                      ? 'bg-[var(--paper)] text-[var(--charcoal)] shadow-lg scale-105' 
+                      : 'text-white/40 hover:text-white'
+                  }`;
+
+                  if (item.type === 'button') {
+                    return (
+                      <button key={idx} onClick={item.onClick} className={commonClass}>
+                        {content}
+                        {!isChatOpen && (
+                          <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-[var(--terracotta)] rounded-full animate-pulse md:hidden" />
+                        )}
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <Link key={item.to} to={item.to} className={commonClass}>
+                      {content}
+                    </Link>
+                  );
+                })}
               </nav>
             </div>
           )}
         </main>
         
-        {isOwner && <ChatAssistant householdId={householdId!} />}
+        {isOwner && (
+          <ChatAssistant 
+            householdId={householdId!} 
+            externalOpen={isChatOpen} 
+            onClose={() => setIsChatOpen(false)} 
+          />
+        )}
       </div>
     );
 }

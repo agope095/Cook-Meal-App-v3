@@ -9,10 +9,14 @@ import remarkGfm from 'remark-gfm';
 
 interface ChatAssistantProps {
   householdId: string;
+  externalOpen?: boolean;
+  onClose?: () => void;
 }
 
-export default function ChatAssistant({ householdId }: ChatAssistantProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function ChatAssistant({ householdId, externalOpen, onClose }: ChatAssistantProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = externalOpen !== undefined ? externalOpen : internalOpen;
+  
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
   const [input, setInput] = useState('');
@@ -52,11 +56,15 @@ export default function ChatAssistant({ householdId }: ChatAssistantProps) {
 
   const handleOpen = () => {
     setIsFullscreen(false); // always start small
-    setIsOpen(true);
+    setInternalOpen(true);
   };
 
   const handleClose = () => {
-    setIsOpen(false);
+    if (onClose) {
+      onClose();
+    } else {
+      setInternalOpen(false);
+    }
     setIsFullscreen(false); // reset for next open
   };
 
@@ -105,8 +113,8 @@ export default function ChatAssistant({ householdId }: ChatAssistantProps) {
 
   return (
     <>
-      {/* Floating Action Button */}
-      {!isOpen && (
+      {/* Floating Action Button - Only show if not externally controlled */}
+      {!isOpen && externalOpen === undefined && (
         <motion.button
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
