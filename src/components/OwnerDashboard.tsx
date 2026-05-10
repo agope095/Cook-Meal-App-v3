@@ -58,7 +58,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       setShowGroceryModal(true);
     } catch (error) {
       console.error("Grocery error:", error);
-      alert("Failed to generate grocery list. Please try again.");
+      alert("Unable to create your shopping list right now. Check your internet connection and try again. If the problem continues, try with fewer meal items.");
     } finally {
       setIsGeneratingGroceries(false);
     }
@@ -76,7 +76,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       alert('Historical data sync complete!');
     } catch (error) {
       console.error("Error syncing historical data:", error);
-      alert("Failed to sync historical data. Please check your connection.");
+      alert("Unable to sync your meal history. Check your connection and try again. Your current meals are still saved.");
     } finally {
       setSyncing(false);
       setSyncProgress(null);
@@ -95,7 +95,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       alert('Nutrition library sync complete!');
     } catch (error) {
       console.error("Error syncing nutrition:", error);
-      alert("Failed to sync nutrition library.");
+      alert("Unable to update nutrition information. Your meals are saved but nutrition details may be limited.");
     } finally {
       setSyncingNutrition(false);
       setNutritionSyncProgress(null);
@@ -300,7 +300,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
       };
       
       console.error("Detailed Error Info:", JSON.stringify(errInfo, null, 2));
-      alert(`Error saving meal plan: ${error.message || 'Please check permissions.'}`);
+      alert("Unable to save your meal plan. Make sure you have permission to edit this kitchen and try again.");
     } finally {
       setSaving(false);
     }
@@ -569,7 +569,7 @@ export default function OwnerDashboard({ householdId }: OwnerDashboardProps) {
     } catch (error) {
       console.error("Manual translation failed:", error);
       updateItem(mealType, item.id, 'bengaliName', ''); // Clear the loading text on error
-      alert("Translation failed. Please try again or type manually.");
+      alert("Unable to translate right now. You can type the translation manually or try again later.");
     }
   };
 

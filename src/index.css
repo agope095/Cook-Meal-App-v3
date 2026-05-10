@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+@import "tailwindcss";
 
 /* ---- Design Tokens ---- */
 :root {
@@ -110,6 +110,76 @@ body {
 
 .font-local-script {
   font-family: 'Noto Sans Bengali', 'Noto Sans Devanagari', 'Inter', sans-serif;
+}
+
+/* ---- Accessibility Fixes ---- */
+/* Reduced motion support for vestibular safety */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Enhanced contrast for interactive elements */
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 2px;
+}
+
+/* Ensure sufficient color contrast for text */
+.star-rating svg {
+  color: var(--terracotta-deep); /* Darker terracotta for better contrast */
+}
+
+/* Feature card text contrast fixes */
+.feature-card-title {
+  color: var(--charcoal); /* Ensure 4.5:1 contrast ratio */
+  font-weight: 700; /* Bold weight for better readability */
+}
+
+.feature-card-text {
+  color: var(--charcoal-soft); /* Slightly softer but still AA compliant */
+  line-height: 1.5; /* Better line spacing for readability */
+}
+
+/* Dashboard metric cards */
+.metric-card {
+  color: var(--charcoal); /* High contrast for data display */
+}
+
+.metric-card .metric-label {
+  color: var(--charcoal-soft); /* Secondary but readable */
+  font-weight: 600;
+}
+
+/* Button text contrast */
+.button-text-primary {
+  color: white; /* White on colored backgrounds */
+  font-weight: 700;
+}
+
+.button-text-secondary {
+  color: var(--charcoal); /* Dark on light backgrounds */
+  font-weight: 600;
+}
+
+/* Touch target sizing for mobile accessibility */
+@media (max-width: 768px) {
+  button,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* ---- Smooth Image Hover ---- */

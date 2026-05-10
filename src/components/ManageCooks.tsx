@@ -87,8 +87,21 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
 
   const handleUnlink = async (cookId: string) => {
     if (!householdId) return;
-    if (!window.confirm("Are you sure you want to unlink this cook? they will lose access to your menu.")) return;
-    
+
+    const cook = cooks.find(c => c.id === cookId);
+    const cookName = cook?.name || 'this cook';
+
+    const confirmed = window.confirm(
+      `Are you sure you want to unlink ${cookName}?\n\n` +
+      `This will immediately remove their access to:\n` +
+      `• Your meal plans and recipes\n` +
+      `• Shopping lists and grocery items\n` +
+      `• Kitchen notifications and updates\n\n` +
+      `This action cannot be undone. They will need a new invite code to reconnect.`
+    );
+
+    if (!confirmed) return;
+
     try {
       await updateDoc(doc(db, 'cooks', cookId), {
         ownerIds: arrayRemove(householdId),
@@ -96,7 +109,7 @@ export default function ManageCooks({ householdId }: ManageCooksProps) {
       });
     } catch (error) {
       console.error("Error unlinking cook:", error);
-      alert("Failed to unlink cook.");
+      alert("Failed to unlink cook. Please check your connection and try again.");
     }
   };
 
