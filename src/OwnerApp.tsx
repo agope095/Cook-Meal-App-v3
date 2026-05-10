@@ -3,7 +3,7 @@ import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, User, getRedirectResult, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db, loginWithGoogle, logout } from './firebase';
-import { Calendar, Calendar as CalendarIcon, Users, Heart, LogIn, LogOut, User as UserIcon, Settings, Home, Mail, Lock } from 'lucide-react';
+import { Calendar, Calendar as CalendarIcon, Users, Heart, LogIn, LogOut, User as UserIcon, Settings, Home, Mail, Lock, ChefHat } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import OwnerDashboard from './components/OwnerDashboard';
 import ChatAssistant from './components/ChatAssistant';
