@@ -54,7 +54,7 @@ const callLongcat = async (messages: ChatMessage[], env: Env, temperature = 0.5)
       'Authorization': `Bearer ${longcatKey}`,
     },
     body: JSON.stringify({
-      model: 'Longcat-Flash-Lite',
+      model: 'LongCat-Flash-Lite',
       messages,
       temperature,
       max_tokens: 8192,
