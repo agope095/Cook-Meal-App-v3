@@ -189,6 +189,7 @@ SCHEMA: Return ONLY a JSON array of objects with this EXACT structure:
 [{
   "date": "YYYY-MM-DD",${mealSchemaObj}
 }]
+TOPIC STEERING: If the user request is completely unrelated to food, recipes, or meal planning, politely decline and steer them back to their culinary goals.
 If no items for a meal and no existing content, return an empty array []. Keep suggestions healthy and balanced. Use high-quality ${cookLanguage} script. QUANTITY RULE: If a quantity is mentioned, calculate nutrition for that amount. Otherwise, estimate based on typical portion sizes. SERVING INTELLIGENCE: For each item, also return inside "nutrition": "per100g" (nutrition per 100g of the cooked dish as {kcal, protein, carbs, fat}), "servingGrams" (estimated total weight in grams for the quantity specified), and "servings" (integer number of persons the quantity is intended for — infer from context like "for 2 people", "4 portions"; default to 1 if unclear).`;
 
       if (pastMeals) systemInstruction += `\nPast meals:\n${pastMeals}`;
