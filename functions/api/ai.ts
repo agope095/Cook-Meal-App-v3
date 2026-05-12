@@ -1,7 +1,7 @@
 import type { PagesFunction } from '@cloudflare/workers-types';
 
 interface Env {
-  NVIDIA_API_KEY: string;
+  LONGCAT_API_KEY: string;
   GEMINI_API_KEY: string;
   FIREBASE_PROJECT_ID: string;
 }
@@ -42,31 +42,30 @@ const decodeJwt = (token: string) => {
   }
 };
 
-const callNvidia = async (messages: ChatMessage[], env: Env, temperature = 0.5) => {
-  const nvidiaKey = (env.NVIDIA_API_KEY || '').trim();
-  if (!nvidiaKey) throw new Error('NVIDIA_API_KEY is missing on the server.');
+const callLongcat = async (messages: ChatMessage[], env: Env, temperature = 0.5) => {
+  const longcatKey = (env.LONGCAT_API_KEY || '').trim();
+  if (!longcatKey) throw new Error('LONGCAT_API_KEY is missing on the server.');
 
-  console.log('[DEBUG] Calling NVIDIA API via fetch (Qwen 3.5 122B)...');
-  const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+  console.log('[DEBUG] Calling Longcat API (Longcat-Flash-Lite)...');
+  const response = await fetch('https://api.longcat.chat/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${nvidiaKey}`,
+      'Authorization': `Bearer ${longcatKey}`,
     },
     body: JSON.stringify({
-      model: 'qwen/qwen3.5-122b-a10b',
+      model: 'Longcat-Flash-Lite',
       messages,
       temperature,
-      max_tokens: 2048,
-      chat_template_kwargs: { enable_thinking: false },
+      max_tokens: 8192,
     })
   });
 
-  console.log('[DEBUG] NVIDIA Response Status:', response.status);
+  console.log('[DEBUG] Longcat Response Status:', response.status);
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('[ERROR] NVIDIA API Error Body:', errorText);
-    throw new Error(`NVIDIA API failed with status ${response.status}: ${errorText}`);
+    console.error('[ERROR] Longcat API Error Body:', errorText);
+    throw new Error(`Longcat API failed with status ${response.status}: ${errorText}`);
   }
 
   const data: any = await response.json();
@@ -81,7 +80,6 @@ const callGemini = async (promptOrMessages: string | ChatMessage[], env: Env) =>
   if (typeof promptOrMessages === 'string') {
     prompt = promptOrMessages;
   } else {
-    // Basic conversion of messages to prompt for Gemini
     prompt = promptOrMessages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
   }
 
@@ -149,21 +147,18 @@ export const onRequestPost: any = async (context: any) => {
 
     const userProfile = payload.userProfile || {};
     const cookLanguage = userProfile.cookLanguage || 'Bengali';
-    // User info for general context (name, location)
     const baseUserInfo = userProfile.name ? `User Name: ${userProfile.name}. City: ${userProfile.city || 'Unknown'}. Society: ${userProfile.society || 'Unknown'}.` : '';
-    // Specific info about the cook's language for translation/meal planning
     const cookLanguageInfo = `Cook's Language: ${cookLanguage}.`;
     
     const userMemory = payload.culinaryMemory || 'No personal preferences recorded yet.';
 
-    // Memory Summarization check (Keep context lean)
     let currentMemory = userMemory;
     let memoryWasSummarized = false;
     if (userMemory.length > 2000) {
       console.log('[DEBUG] Memory too long, requesting summarization...');
       const summaryPrompt = `Summarize the following user culinary preferences into a concise paragraph (max 500 chars), preserving ALL allergies and strong dislikes:\n${userMemory}`;
       try {
-        currentMemory = await callNvidia([{ role: 'user', content: summaryPrompt }], env, 0.3);
+        currentMemory = await callLongcat([{ role: 'user', content: summaryPrompt }], env, 0.3);
         memoryWasSummarized = true;
       } catch {
         currentMemory = await callGemini(summaryPrompt, env);
@@ -202,9 +197,9 @@ If no items for a meal and no existing content, return an empty array []. Keep s
       
       let rawText = '';
       try {
-        rawText = await callNvidia([{ role: 'user', content: `${systemInstruction}\nRequest: ${contents}` }], env, 0.5);
+        rawText = await callLongcat([{ role: 'user', content: `${systemInstruction}\nRequest: ${contents}` }], env, 0.5);
       } catch (err) {
-        console.warn('[WARN] NVIDIA failed for meal-plan, falling back to Gemini:', err);
+        console.warn('[WARN] Longcat failed for meal-plan, falling back to Gemini:', err);
         rawText = await callGemini(`${systemInstruction}\nRequest: ${contents}`, env);
       }
       return jsonResponse(200, { data: extractJsonArray(rawText) });
@@ -214,7 +209,6 @@ If no items for a meal and no existing content, return an empty array []. Keep s
       const { messages, pastMeals, favorites, currentDate } = payload;
       let systemInstruction = `You are "SousChefAI", a friendly, slightly chatty, and knowledgeable culinary assistant. ${baseUserInfo}\n`;
       systemInstruction += `STRICT RULE: Respond in English (the user's language) regardless of the cook's language setting. Your goal is to assist the household owner.\n`;
-
       systemInstruction += `CURRENT DATE: ${currentDate || new Date().toISOString()}\n`;
       systemInstruction += `USER MEMORY: ${currentMemory}\n`;
       systemInstruction += `GREETING: Use the User's City (${userProfile.city}) for location-based greetings (e.g., "Good evening in ${userProfile.city}!"). DO NOT mention the Society Name (${userProfile.society}) in the greeting unless the user specifically asks about it or if it's relevant to a specific local event/ingredient. Keep the greeting focused on the City.\n`;
@@ -230,9 +224,9 @@ Otherwise, just return the text reply or the JSON with "reply" and "updateMemory
       
       let content = '';
       try {
-        content = await callNvidia([{ role: 'system', content: systemInstruction }, ...(messages || [])], env, 0.7);
+        content = await callLongcat([{ role: 'system', content: systemInstruction }, ...(messages || [])], env, 0.7);
       } catch (err) {
-        console.warn('[WARN] NVIDIA failed for chat, falling back to Gemini:', err);
+        console.warn('[WARN] Longcat failed for chat, falling back to Gemini:', err);
         content = await callGemini([{ role: 'system', content: systemInstruction }, ...(messages || [])], env);
       }
       
@@ -241,7 +235,7 @@ Otherwise, just return the text reply or the JSON with "reply" and "updateMemory
         if (parsed.reply) {
           return jsonResponse(200, { 
             data: parsed.reply, 
-            memoryUpdate: parsed.updateMemory,
+            memoryUpdate: parsed.updateMemory, 
             addToPlan: parsed.addToPlan,
             summarizedMemory: memoryWasSummarized ? currentMemory : undefined 
           });
@@ -257,9 +251,8 @@ Otherwise, just return the text reply or the JSON with "reply" and "updateMemory
       const { items } = payload;
       const prompt = `Translate the following dish objects into ${cookLanguage} script. Translate "name", "quantity", and "instruction" fields. Return ONLY a JSON array of objects with keys: name, nameBn, quantity, quantityBn, instruction, instructionBn.\nItems: ${JSON.stringify(items)}`;
       let rawText = '';
-
       try {
-        rawText = await callNvidia([{ role: 'user', content: prompt }], env, 0.1);
+        rawText = await callLongcat([{ role: 'user', content: prompt }], env, 0.1);
       } catch {
         rawText = await callGemini(prompt, env);
       }
@@ -271,7 +264,7 @@ Otherwise, just return the text reply or the JSON with "reply" and "updateMemory
       const prompt = `Translate "${englishName}" to ${cookLanguage} script. Return ONLY the translated text in ${cookLanguage} script, no other words.`;
       let text = '';
       try {
-        text = await callNvidia([{ role: 'user', content: prompt }], env, 0.1);
+        text = await callLongcat([{ role: 'user', content: prompt }], env, 0.1);
       } catch {
         text = await callGemini(prompt, env);
       }
@@ -286,7 +279,7 @@ Return ONLY a JSON array of strings, where each string is an item and its approx
       
       let rawText = '';
       try {
-        rawText = await callNvidia([{ role: 'user', content: prompt }], env, 0.3);
+        rawText = await callLongcat([{ role: 'user', content: prompt }], env, 0.3);
       } catch {
         rawText = await callGemini(prompt, env);
       }
@@ -304,7 +297,7 @@ Structure: [{"id": "...", "name": "...", "kcal": number, "protein": number, "car
       
       let rawText = '';
       try {
-        rawText = await callNvidia([{ role: 'user', content: prompt }], env, 0.2);
+        rawText = await callLongcat([{ role: 'user', content: prompt }], env, 0.2);
       } catch {
         rawText = await callGemini(prompt, env);
       }
